@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { obs } from "../obs";
 import { compareVersions, usePluginStatus } from "../pluginStatus";
 
@@ -7,6 +7,8 @@ interface InstallError {
   kind: "obsRunning" | "permissionDenied" | "notBundled" | "cancelled" | "failed";
   message: string;
 }
+
+const logEvent = (message: string) => invoke("log_install_event", { message }).catch(() => {});
 
 type InstallState = { kind: "idle" } | { kind: "installing" } | { kind: "done" } | { kind: "error"; error: InstallError };
 
@@ -52,11 +54,37 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
   const [install, setInstall] = useState<InstallState>({ kind: "idle" });
   const [launching, setLaunching] = useState<string | null>(null);
   const outputs = useOutputsActive(obsConnected);
+  const lastLogged = useRef("");
+
+  const bundled = status?.bundledVersion ?? null;
+  const fileCurrent = Boolean(bundled && status?.installedVersion && compareVersions(status.installedVersion, bundled) >= 0);
+  const installed = install.kind === "done" || fileCurrent;
+  const loadedCurrent = Boolean(bundled && loadedVersion && compareVersions(loadedVersion, bundled) >= 0);
+  const finished = installed && loadedCurrent;
+
+  const closeStep: StepState = installed || !status?.obsRunning ? "done" : "active";
+  const installStep: StepState = installed ? "done" : closeStep === "done" ? "active" : "waiting";
+  const openStep: StepState = finished ? "done" : installed ? "active" : "waiting";
+
+  // Record every change in what the dialog shows, so a failed install can be traced from install.log.
+  useEffect(() => {
+    if (!status) return;
+    const snapshot =
+      `steps close=${closeStep} install=${installStep} open=${openStep} finished=${finished} | ` +
+      `obsRunning=${status.obsRunning} connected=${obsConnected} loaded=${loadedVersion} ` +
+      `file=${status.installed ? (status.installedVersion ?? "unknown") : "none"} bundled=${bundled} ` +
+      `pluginManager=${status.enabledInPluginManager} install=${install.kind}` +
+      (install.kind === "error" ? ` (${install.error.kind}: ${install.error.message})` : "");
+    if (snapshot !== lastLogged.current) {
+      lastLogged.current = snapshot;
+      logEvent(snapshot);
+    }
+  });
 
   if (!status) return null;
-  const bundled = status.bundledVersion;
 
   const run = (command: "install_plugin" | "install_plugin_elevated") => {
+    logEvent(`clicked ${command}`);
     setInstall({ kind: "installing" });
     invoke(command)
       .then(() => setInstall({ kind: "done" }))
@@ -64,25 +92,17 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
   };
 
   const launch = () => {
+    logEvent("clicked launch_obs");
     setLaunching(null);
     invoke("launch_obs").catch((e: string) => setLaunching(e));
   };
-
-  const fileCurrent = Boolean(bundled && status.installedVersion && compareVersions(status.installedVersion, bundled) >= 0);
-  const installed = install.kind === "done" || fileCurrent;
-  const loadedCurrent = Boolean(bundled && loadedVersion && compareVersions(loadedVersion, bundled) >= 0);
-  const finished = installed && loadedCurrent;
-
-  const closeStep: StepState = installed || !status.obsRunning ? "done" : "active";
-  const installStep: StepState = installed ? "done" : closeStep === "done" ? "active" : "waiting";
-  const openStep: StepState = finished ? "done" : installed ? "active" : "waiting";
 
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="plugin-title">
       <div className="dialog">
         <div className="dialog-head">
           <h2 id="plugin-title">{status.installed ? "更新 OBS 外掛" : "安裝 OBS 外掛"}</h2>
-          <button type="button" className="link" onClick={onClose}>
+          <button type="button" className="link" onClick={() => (logEvent("closed dialog"), onClose())}>
             關閉
           </button>
         </div>

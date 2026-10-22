@@ -4,6 +4,7 @@
 //! loads plugins at startup. The app never closes OBS itself; the user does,
 //! so they can finish a stream or save their work first.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -55,6 +56,22 @@ impl InstallError {
     fn new(kind: &'static str, message: impl Into<String>) -> Self {
         Self { kind, message: message.into() }
     }
+}
+
+/// Appends one timestamped line to `install.log` in the app's log folder
+/// (Windows: %LOCALAPPDATA%\io.github.weisunglee.obsaudiokit\logs).
+fn log(app: &AppHandle, message: impl AsRef<str>) {
+    let Ok(dir) = app.path().app_log_dir() else { return };
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("install.log")) {
+        let _ = writeln!(file, "{} {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"), message.as_ref());
+    }
+}
+
+/// Lets the install dialog record what the user saw and clicked.
+#[tauri::command]
+pub fn log_install_event(app: AppHandle, message: String) {
+    log(&app, format!("[ui] {message}"));
 }
 
 fn obs_config_dir() -> Option<PathBuf> {
@@ -151,8 +168,10 @@ fn copy_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
     }
 }
 
-fn check_installed(target: &Path) -> Result<(), InstallError> {
-    match file_version(target) {
+fn check_installed(app: &AppHandle, target: &Path) -> Result<(), InstallError> {
+    let found = file_version(target);
+    log(app, format!("check: {} exists={} version={found:?} expected={BUNDLED_VERSION}", target.display(), target.exists()));
+    match found {
         Some(v) if v != BUNDLED_VERSION => Err(InstallError::new(
             "failed",
             format!("安裝後的外掛版本是 {v}，不是預期的 {BUNDLED_VERSION}。"),
@@ -162,18 +181,37 @@ fn check_installed(target: &Path) -> Result<(), InstallError> {
 }
 
 fn prepare(app: &AppHandle) -> Result<(PathBuf, PathBuf), InstallError> {
-    if obs_running() {
+    let running = obs_running();
+    let source = bundled_path(app);
+    let target = install_path();
+    log(app, format!("prepare: obs_running={running} source={source:?} target={target:?}"));
+    if running {
         return Err(InstallError::new("obsRunning", "OBS 還開著。請先關閉 OBS 再安裝。"));
     }
-    let source = bundled_path(app).ok_or_else(|| InstallError::new("notBundled", "這個版本的 App 沒有附外掛。"))?;
-    let target = install_path().ok_or_else(|| InstallError::new("failed", "找不到 OBS 的外掛資料夾。"))?;
+    let source = source.ok_or_else(|| InstallError::new("notBundled", "這個版本的 App 沒有附外掛。"))?;
+    let target = target.ok_or_else(|| InstallError::new("failed", "找不到 OBS 的外掛資料夾。"))?;
     Ok((source, target))
+}
+
+/// Runs an install step and records how it ended.
+fn logged(app: &AppHandle, step: &str, run: impl FnOnce() -> Result<(), InstallError>) -> Result<(), InstallError> {
+    log(app, format!("{step}: start (app {}, bundled plugin {BUNDLED_VERSION})", app.package_info().version));
+    let result = run();
+    match &result {
+        Ok(()) => log(app, format!("{step}: ok")),
+        Err(e) => log(app, format!("{step}: error kind={} message={}", e.kind, e.message)),
+    }
+    result
 }
 
 /// Installs with the user's normal permissions.
 #[tauri::command]
 pub fn install_plugin(app: AppHandle) -> Result<(), InstallError> {
-    let (source, target) = prepare(&app)?;
+    logged(&app, "install", || install_normal(&app))
+}
+
+fn install_normal(app: &AppHandle) -> Result<(), InstallError> {
+    let (source, target) = prepare(app)?;
     let result = (|| {
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
@@ -187,6 +225,7 @@ pub fn install_plugin(app: AppHandle) -> Result<(), InstallError> {
     match result {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            log(app, format!("copy: {e}"));
             return Err(InstallError::new(
                 "permissionDenied",
                 "沒有權限寫入外掛資料夾。這通常是因為之前用系統管理員權限安裝過外掛。",
@@ -194,6 +233,7 @@ pub fn install_plugin(app: AppHandle) -> Result<(), InstallError> {
         }
         Err(e) => return Err(InstallError::new("failed", format!("複製外掛失敗：{e}"))),
     }
+    log(app, "copy: done");
 
     #[cfg(target_os = "macos")]
     {
@@ -201,44 +241,71 @@ pub fn install_plugin(app: AppHandle) -> Result<(), InstallError> {
         let _ = Command::new("xattr").args(["-dr", "com.apple.quarantine"]).arg(&target).status();
     }
 
-    check_installed(&target)
+    check_installed(app, &target)
 }
 
 /// Windows only: copies the plugin through an elevated cmd script, which shows a UAC prompt.
 /// Used when an earlier elevated install left the folder writable only by administrators.
 #[tauri::command]
 pub fn install_plugin_elevated(app: AppHandle) -> Result<(), InstallError> {
+    logged(&app, "install-elevated", || install_elevated(&app))
+}
+
+fn install_elevated(app: &AppHandle) -> Result<(), InstallError> {
     #[cfg(target_os = "windows")]
     {
-        let (source, target) = prepare(&app)?;
+        let (source, target) = prepare(app)?;
         let dir = target.parent().ok_or_else(|| InstallError::new("failed", "外掛路徑不正確"))?;
-        let script = std::env::temp_dir().join("obs-audio-kit-install.cmd");
+        let temp = std::env::temp_dir();
+        let script = temp.join("obs-audio-kit-install.cmd");
+        // The elevated script reports copy's own output and exit code here, since its
+        // console is hidden and Start-Process only tells us whether it was allowed to run.
+        let result_file = temp.join("obs-audio-kit-install-result.txt");
+        let _ = std::fs::remove_file(&result_file);
         let body = format!(
-            "@echo off\r\nif not exist \"{dir}\" mkdir \"{dir}\"\r\ncopy /Y \"{src}\" \"{dst}\" >nul\r\n",
+            "@echo off\r\nif not exist \"{dir}\" mkdir \"{dir}\" > \"{res}\" 2>&1\r\ncopy /Y \"{src}\" \"{dst}\" >> \"{res}\" 2>&1\r\necho copy-exit=%errorlevel% >> \"{res}\"\r\n",
             dir = dir.display(),
             src = source.display(),
             dst = target.display(),
+            res = result_file.display(),
         );
-        std::fs::write(&script, body).map_err(|e| InstallError::new("failed", e.to_string()))?;
+        log(app, format!("elevated: script {}:\n{body}", script.display()));
+        std::fs::write(&script, &body).map_err(|e| InstallError::new("failed", e.to_string()))?;
 
         let ps_path = script.display().to_string().replace('\'', "''");
-        let status = Command::new("powershell")
+        let output = Command::new("powershell")
             .args([
                 "-NoProfile",
                 "-Command",
                 &format!("Start-Process -FilePath '{ps_path}' -Verb RunAs -Wait -WindowStyle Hidden"),
             ])
-            .status()
+            .output()
             .map_err(|e| InstallError::new("failed", e.to_string()))?;
+        log(
+            app,
+            format!(
+                "elevated: powershell exit={:?} stdout={:?} stderr={:?}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim(),
+            ),
+        );
+        match std::fs::read(&result_file) {
+            // cmd writes in the console code page; lossy UTF-8 keeps the ASCII parts readable.
+            Ok(bytes) => log(app, format!("elevated: script output: {:?}", String::from_utf8_lossy(&bytes).trim())),
+            Err(e) => log(app, format!("elevated: no script output ({e}); the script may not have run")),
+        }
         let _ = std::fs::remove_file(&script);
+        let _ = std::fs::remove_file(&result_file);
+
         // PowerShell fails Start-Process when the user answers "No" in the UAC prompt.
-        if !status.success() {
+        if !output.status.success() {
             return Err(InstallError::new("cancelled", "已取消系統管理員權限的安裝。"));
         }
         if !target.exists() {
             return Err(InstallError::new("failed", "安裝後找不到外掛檔案。"));
         }
-        check_installed(&target)
+        check_installed(app, &target)
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -249,7 +316,13 @@ pub fn install_plugin_elevated(app: AppHandle) -> Result<(), InstallError> {
 
 /// Starts OBS the way its own shortcut does.
 #[tauri::command]
-pub fn launch_obs() -> Result<(), String> {
+pub fn launch_obs(app: AppHandle) -> Result<(), String> {
+    let result = spawn_obs();
+    log(&app, format!("launch-obs: {result:?}"));
+    result
+}
+
+fn spawn_obs() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;

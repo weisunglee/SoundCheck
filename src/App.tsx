@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useRef, useState } from "react";
 import { ChannelStrip } from "./components/ChannelStrip";
 import { PluginInstall } from "./components/PluginInstall";
@@ -42,7 +43,7 @@ export default function App() {
         <i />
         {connection.kind === "connected" && `已連線本機 OBS ${connection.obsVersion}`}
         {connection.kind === "connecting" && "正在連線 OBS…"}
-        {connection.kind === "failed" && connection.message}
+        {connection.kind === "failed" && "沒有連上 OBS"}
       </span>
       <span className="spacer" />
       {state && (
@@ -72,6 +73,8 @@ export default function App() {
     </header>
   );
 
+  // Rendered right after the header in both layouts below, so React keeps the dialog (and an
+  // install in progress) when the app switches between "not connected" and the mixer.
   const pluginDialog = pluginOpen && (
     <PluginInstall obsConnected={state !== null} loadedVersion={state?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
   );
@@ -86,6 +89,12 @@ export default function App() {
             <>
               <h2>還沒連上 OBS</h2>
               <p>{connection.message}</p>
+              {pluginStatus && !pluginStatus.obsRunning && (
+                <button type="button" className="btn primary" onClick={() => invoke("launch_obs").catch(() => {})}>
+                  開啟 OBS
+                </button>
+              )}
+              <p className="hint">連上之前會每 3 秒自動重試。</p>
             </>
           ) : (
             <p>{audio.error ?? "正在讀取 OBS 的聲音設定…"}</p>
@@ -126,6 +135,7 @@ export default function App() {
   return (
     <div className="app">
       {header}
+      {pluginDialog}
       {audio.error && <div className="error-bar">{audio.error}</div>}
       {!state.pluginAvailable && (
         <div className="notice-bar">
@@ -205,7 +215,6 @@ export default function App() {
       </div>
 
       {soundTestOpen && <SoundTest onClose={() => setSoundTestOpen(false)} />}
-      {pluginDialog}
     </div>
   );
 }

@@ -616,10 +616,6 @@ body,
 
 .conn-failed {
   color: var(--hot);
-  max-width: 40ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .empty {
@@ -635,6 +631,11 @@ body,
   margin: 0 0 6px;
   color: var(--fg);
   font-size: 18px;
+}
+
+.empty {
+  justify-items: center;
+  gap: 12px;
 }
 
 .empty p {

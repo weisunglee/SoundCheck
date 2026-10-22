@@ -14,6 +14,7 @@ pub fn run() {
             plugin_install::install_plugin,
             plugin_install::install_plugin_elevated,
             plugin_install::launch_obs,
+            plugin_install::log_install_event,
             sound_test::sound_test_record,
             sound_test::sound_test_stop_recording,
             sound_test::sound_test_play,

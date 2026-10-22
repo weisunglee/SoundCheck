@@ -86,6 +86,14 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 | macOS | `~/Library/Application Support/obs-studio/plugins/obs-audio-kit.plugin` | 不需要 |
 | Linux | `~/.config/obs-studio/plugins/obs-audio-kit/bin/64bit/` | 不需要（Flatpak 版 OBS 不支援） |
 
+安裝的每一步（安裝視窗顯示的狀態、使用者按的按鈕、複製結果、系統管理員權限複製的輸出）都會寫進安裝紀錄 `install.log`：
+
+| 平台 | 位置 |
+|---|---|
+| Windows | `%LOCALAPPDATA%\io.github.weisunglee.obsaudiokit\logs\install.log` |
+| macOS | `~/Library/Logs/io.github.weisunglee.obsaudiokit/install.log` |
+| Linux | `~/.local/share/io.github.weisunglee.obsaudiokit/logs/install.log` |
+
 ### 驗證紀錄
 
 在 Windows 11（OBS 32.2.2）上驗證過，外掛以 OBS 31.1.1 原始碼建置：
@@ -98,11 +106,11 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 - **試音播放時暫停直播聲音**（`pause-test.mjs`，8 項全部通過）：暫停時 21 個音訊來源全部離開直播音軌，其他音軌不受影響；重複暫停會被拒絕；有心跳時維持暫停；心跳停止後外掛在逾時（2 秒）後自動還原；明確還原也會立即恢復。測試前後每個來源的音軌設定完全相同
 - **試音功能（App）**：使用者在 Windows 上實際操作錄音、看結果、播放，聲音正常
 - **混音器使用真實 OBS 資料**：在 7 個場景、1 個群組、21 個音訊來源的實際設定上讀取正確（`tools/inspect-obs.ts`），各場景的來源狀態判斷正確（含巢狀場景與群組）；使用者實際操作確認 App 和 OBS 的雙向同步、音量表都正常
+- **一鍵更新外掛**（依 `install.log`）：App 偵測到 OBS 載入 0.1.0、附的是 0.2.0，顯示更新；OBS 關閉後一般權限複製被拒（資料夾擁有者是 Administrators），改用系統管理員權限複製成功，檔案版本確認為 0.2.0；「開啟 OBS」後連線並確認 OBS 載入 0.2.0
 - **Windows 資料夾權限**：`C:\ProgramData\obs-studio\plugins` 的 ACL 讓一般使用者可以新建資料夾，且對自己建的資料夾有完整權限，推論全新安裝不需要 UAC。但如果資料夾是用提權方式建的（擁有者變成 Administrators），之後一般權限就無法更新或刪除，所以**安裝程式必須一律用一般權限安裝**，不能有時提權有時不提權
 
 ### 待驗證
 
-- 一鍵安裝／更新流程（版本比對、等待關閉 OBS、一般權限安裝失敗時改用系統管理員權限、開啟 OBS、確認載入新版）在 Windows 上完整跑一次
 - 直播中時，從直播輸出的 mixer mask 讀取直播音軌（`streamTracksOrigin: "output"`）
 - 簡易輸出模式下的直播音軌判斷
 - 一般權限（非提權）的程式實際寫入 `C:\ProgramData\obs-studio\plugins` 是否成功（目前只從 ACL 推論）
