@@ -1,7 +1,8 @@
 // Connection to the local OBS through obs-websocket, using OBS's own saved settings.
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import OBSWebSocket, { EventSubscription, OBSWebSocketError } from "obs-websocket-js";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface WebsocketConfig {
   enabled: boolean;
@@ -33,28 +34,68 @@ async function connectLocal(): Promise<string> {
   return (await obs.call("GetVersion")).obsVersion;
 }
 
-/** Connects on mount and reconnects whenever OBS closes the connection. */
+/**
+ * Connects on mount and keeps trying until connected. Retries come from three places,
+ * because the webview's own timer is throttled while the window is in the background:
+ * - the native OBS watcher (`obs-presence`), which fires as soon as OBS's WebSocket is reachable
+ * - the window becoming visible again
+ * - a 3-second timer after each failed or dropped connection
+ */
 export function useObsConnection(): ConnectionState {
   const [state, setState] = useState<ConnectionState>({ kind: "connecting" });
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const inFlight = useRef(false);
+  const againAfter = useRef(false);
 
-  const attempt = useCallback(() => {
-    setState({ kind: "connecting" });
+  const attempt = useCallback(function run() {
+    if (inFlight.current) {
+      // A trigger arrived mid-attempt (e.g. OBS just became ready); try once more afterwards.
+      againAfter.current = true;
+      return;
+    }
+    inFlight.current = true;
+    if (stateRef.current.kind !== "failed") setState({ kind: "connecting" });
     connectLocal()
       .then((obsVersion) => setState({ kind: "connected", obsVersion }))
-      .catch((e: Error) => setState({ kind: "failed", message: e.message }));
+      .catch((e: Error) => setState({ kind: "failed", message: e.message }))
+      .finally(() => {
+        inFlight.current = false;
+        if (againAfter.current && stateRef.current.kind !== "connected") {
+          againAfter.current = false;
+          run();
+        }
+      });
   }, []);
 
   useEffect(() => {
-    attempt();
+    const notConnected = () => stateRef.current.kind !== "connected";
     let timer: ReturnType<typeof setTimeout>;
-    const onClosed = () => {
-      setState({ kind: "failed", message: "和 OBS 的連線中斷了，正在重新連線…" });
-      timer = setTimeout(attempt, RETRY_MS);
+    const retryLater = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => notConnected() && attempt(), RETRY_MS);
     };
+
+    // Fires both when a live connection drops and when a connection attempt fails.
+    const onClosed = () => {
+      if (stateRef.current.kind === "connected") {
+        setState({ kind: "failed", message: "和 OBS 的連線中斷了，正在重新連線…" });
+      }
+      retryLater();
+    };
+    const onVisible = () => document.visibilityState === "visible" && notConnected() && attempt();
+    const offPresence = listen<{ running: boolean; ready: boolean }>("obs-presence", (e) => {
+      if (e.payload.ready && notConnected()) attempt();
+    });
+
+    attempt();
     obs.on("ConnectionClosed", onClosed);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearTimeout(timer);
       obs.off("ConnectionClosed", onClosed);
+      document.removeEventListener("visibilitychange", onVisible);
+      offPresence.then((off) => off());
     };
   }, [attempt]);
 

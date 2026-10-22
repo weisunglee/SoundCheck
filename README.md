@@ -107,10 +107,12 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 - **試音功能（App）**：使用者在 Windows 上實際操作錄音、看結果、播放，聲音正常
 - **混音器使用真實 OBS 資料**：在 7 個場景、1 個群組、21 個音訊來源的實際設定上讀取正確（`tools/inspect-obs.ts`），各場景的來源狀態判斷正確（含巢狀場景與群組）；使用者實際操作確認 App 和 OBS 的雙向同步、音量表都正常
 - **一鍵更新外掛**（依 `install.log`）：App 偵測到 OBS 載入 0.1.0、附的是 0.2.0，顯示更新；OBS 關閉後一般權限複製被拒（資料夾擁有者是 Administrators），改用系統管理員權限複製成功，檔案版本確認為 0.2.0；「開啟 OBS」後連線並確認 OBS 載入 0.2.0
+- **App 在背景時偵測 OBS 開啟**：Windows WebView2 會壓慢甚至暫停背景視窗的計時器（Tauri 的 `backgroundThrottling` 在 Windows 不支援），所以改由 Rust 端每秒檢查 OBS 程序和 WebSocket 連接埠，一可連線就通知介面連線；視窗回到前景時也會立即重試。使用者確認先開 App、最小化、再自己開 OBS 的情況能正常偵測
 - **Windows 資料夾權限**：`C:\ProgramData\obs-studio\plugins` 的 ACL 讓一般使用者可以新建資料夾，且對自己建的資料夾有完整權限，推論全新安裝不需要 UAC。但如果資料夾是用提權方式建的（擁有者變成 Administrators），之後一般權限就無法更新或刪除，所以**安裝程式必須一律用一般權限安裝**，不能有時提權有時不提權
 
 ### 待驗證
 
+- OBS 改了 WebSocket 連接埠或密碼後，App 是否會自動用新設定重連（每次連線都會重新讀設定檔，但還沒實測）
 - 直播中時，從直播輸出的 mixer mask 讀取直播音軌（`streamTracksOrigin: "output"`）
 - 簡易輸出模式下的直播音軌判斷
 - 一般權限（非提權）的程式實際寫入 `C:\ProgramData\obs-studio\plugins` 是否成功（目前只從 ACL 推論）

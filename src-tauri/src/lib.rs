@@ -1,5 +1,6 @@
 mod loudness;
 mod obs_config;
+mod obs_watch;
 mod plugin_install;
 mod sound_test;
 
@@ -8,6 +9,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(sound_test::SoundTestState::default())
+        .setup(|app| {
+            obs_watch::start(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             obs_config::read_obs_websocket_config,
             plugin_install::plugin_status,

@@ -125,7 +125,7 @@ fn file_version(path: &Path) -> Option<String> {
     }
 }
 
-fn obs_running() -> bool {
+pub fn obs_running() -> bool {
     let mut system = System::new();
     system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     system.processes_by_exact_name(OBS_PROCESS.as_ref()).next().is_some()
