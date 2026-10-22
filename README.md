@@ -86,10 +86,22 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 | macOS | `~/Library/Application Support/obs-studio/plugins/obs-audio-kit.plugin` | 不需要 |
 | Linux | `~/.config/obs-studio/plugins/obs-audio-kit/bin/64bit/` | 不需要（Flatpak 版 OBS 不支援） |
 
+### 驗證紀錄
+
+在 Windows 11（OBS 32.2.2）上驗證過，外掛以 OBS 31.1.1 原始碼建置：
+
+- **外掛載入**：放進 `C:\ProgramData\obs-studio\plugins\obs-audio-kit\bin\64bit\` 後重開 OBS 即可載入，log 有 `[obs-audio-kit] module loaded`
+- **OBS 32 外掛管理員**：新外掛自動加入 `plugin_manager\modules.json`，預設 `enabled=true`，使用者不需要手動啟用
+- **接出直播音軌**：`StartTap` 接出音軌 1，15 秒收到 15.00 秒音訊（實際耗時 15.01–15.02 秒），沒有掉資料；錄到的峰值和 OBS 自己的音量表一致（-14.8 dBFS 對 -14.8 dBFS）
+- **直播用哪條音軌**：沒在直播時，從進階模式的設定（`AdvOut` / `TrackIndex`）正確讀到音軌 1
+- **自動連線**：讀取 `%APPDATA%\obs-studio\plugin_config\obs-websocket\config.json` 的連接埠和密碼就能連上 obs-websocket 5.7.4，不需要使用者輸入
+- **Windows 資料夾權限**：`C:\ProgramData\obs-studio\plugins` 的 ACL 讓一般使用者可以新建資料夾，且對自己建的資料夾有完整權限，推論全新安裝不需要 UAC。但如果資料夾是用提權方式建的（擁有者變成 Administrators），之後一般權限就無法更新或刪除，所以**安裝程式必須一律用一般權限安裝**，不能有時提權有時不提權
+
 ### 待驗證
 
-- Windows 寫入 `C:\ProgramData\obs-studio\plugins` 是否需要 UAC 提權
-- OBS 32 的外掛管理員對新安裝的外掛預設是否啟用
+- 直播中時，從直播輸出的 mixer mask 讀取直播音軌（`streamTracksOrigin: "output"`）
+- 簡易輸出模式下的直播音軌判斷
+- 一般權限（非提權）的程式實際寫入 `C:\ProgramData\obs-studio\plugins` 是否成功（目前只從 ACL 推論）
 - macOS 上未簽章的外掛能否載入、複製後是否要移除 quarantine 屬性
 - 最低支援的 OBS 版本（較新版本建置的外掛，舊版 OBS 不會載入，所以要用最低支援版本建置）
 - 播放期間取消勾選、再還原音軌時，OBS 是否會有爆音或短暫斷音

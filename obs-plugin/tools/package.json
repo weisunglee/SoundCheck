@@ -1,0 +1,8 @@
+{
+  "name": "obs-audio-kit-plugin-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "obs-websocket-js": "^5.0.8"
+  }
+}
