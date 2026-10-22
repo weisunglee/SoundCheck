@@ -602,8 +602,223 @@ body,
   gap: 6px;
 }
 
+/* ---------- connection ---------- */
+
+.conn-connecting i {
+  background: var(--warn);
+  box-shadow: none;
+}
+
+.conn-failed i {
+  background: var(--hot);
+  box-shadow: none;
+}
+
+.conn-failed {
+  color: var(--hot);
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mock-note {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- sound test ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+.dialog {
+  width: min(460px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px 20px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
+}
+
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dialog-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.dialog-lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.dialog-body {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.dialog-body > .progress,
+.dialog-body > .hmeters,
+.dialog-body > .verdict,
+.dialog-body > .stats,
+.dialog-body > .paused-banner {
+  justify-self: stretch;
+}
+
+.row-label {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.seg-inline {
+  grid-template-columns: repeat(3, 72px);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.rec-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hot);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.hmeters {
+  display: grid;
+  gap: 4px;
+}
+
+.hmeter,
+.progress {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--raised);
+  overflow: hidden;
+}
+
+.hmeter b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(to right, var(--ok) 0 62%, var(--warn) 78%, var(--hot) 96%);
+  background-size: 420px 100%;
+  transition: width 60ms linear;
+}
+
+.progress {
+  height: 4px;
+}
+
+.progress b {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.verdict {
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.6;
+  border: 1px solid;
+}
+
+.verdict-ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.verdict-warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+
+.verdict-bad {
+  color: var(--hot);
+  border-color: color-mix(in srgb, var(--hot) 45%, transparent);
+  background: color-mix(in srgb, var(--hot) 10%, transparent);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.stats div {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.stats dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stats dd {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.paused-banner {
+  font-size: 12px;
+  color: var(--warn);
+  text-align: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .meter b {
+  .meter b,
+  .hmeter b {
     transition: none;
+  }
+
+  .rec-dot {
+    animation: none;
   }
 }

@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { ChannelStrip } from "./components/ChannelStrip";
 import { SceneList } from "./components/SceneList";
 import { SceneTable } from "./components/SceneTable";
+import { SoundTest } from "./components/SoundTest";
 import { mockScenes, mockSources, mockStreamTracks, mockSwitchableScenes, useMockLevels } from "./mock";
+import { useObsConnection } from "./obs";
 import { scenesContaining, sourceStatus } from "./status";
 import type { AudioSource, Scene } from "./types";
 
@@ -18,6 +20,8 @@ export default function App() {
   const [scenes, setScenes] = useState<Scene[]>(mockScenes);
   const [programScene, setProgramScene] = useState("遊戲");
   const [view, setView] = useState<View>("scene");
+  const [soundTestOpen, setSoundTestOpen] = useState(false);
+  const connection = useObsConnection();
   const levels = useMockLevels(sources);
   const streamTracks = mockStreamTracks;
 
@@ -78,11 +82,23 @@ export default function App() {
     <div className="app">
       <header className="bar">
         <span className="brand">obs-audio-kit</span>
-        <span className="conn">
+        <span className={`conn conn-${connection.kind}`} title={connection.kind === "failed" ? connection.message : undefined}>
           <i />
-          已連線本機 OBS（假資料）
+          {connection.kind === "connected" && `已連線本機 OBS ${connection.obsVersion}`}
+          {connection.kind === "connecting" && "正在連線 OBS…"}
+          {connection.kind === "failed" && connection.message}
         </span>
+        <span className="mock-note">混音器目前是假資料</span>
         <span className="spacer" />
+        <button
+          type="button"
+          className="btn primary"
+          disabled={connection.kind !== "connected"}
+          title={connection.kind !== "connected" ? "連上 OBS 後才能試音" : undefined}
+          onClick={() => setSoundTestOpen(true)}
+        >
+          試音
+        </button>
         <div className="tabs" role="tablist">
           <button type="button" role="tab" aria-selected={view === "scene"} onClick={() => setView("scene")}>
             目前場景
@@ -166,6 +182,8 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {soundTestOpen && <SoundTest onClose={() => setSoundTestOpen(false)} />}
     </div>
   );
 }

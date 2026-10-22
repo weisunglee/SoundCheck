@@ -2,6 +2,7 @@
 #include <obs-module.h>
 
 #include "obs-websocket-api.h"
+#include "stream-pause.hpp"
 #include "stream-tracks.hpp"
 #include "tap.hpp"
 
@@ -14,6 +15,7 @@ extern "C" const char *obs_module_description(void)
 }
 
 static Tap g_tap;
+static StreamPause g_pause;
 static obs_websocket_vendor g_vendor = nullptr;
 
 static void set_error(obs_data_t *response, const char *message)
@@ -40,6 +42,7 @@ static void handle_get_info(obs_data_t *, obs_data_t *response, void *)
     obs_data_set_array(response, "streamTracks", tracks);
     obs_data_set_string(response, "streamTracksOrigin", stream.origin.c_str());
     obs_data_set_bool(response, "tapRunning", g_tap.running());
+    obs_data_set_bool(response, "streamAudioPaused", g_pause.paused());
     obs_data_array_release(tracks);
 }
 
@@ -70,12 +73,48 @@ static void handle_stop_tap(obs_data_t *, obs_data_t *response, void *)
     obs_data_set_bool(response, "ok", true);
 }
 
+// Vendor request "PauseStreamAudio" { timeoutMs?: number }: silences the stream tracks
+// until "ResumeStreamAudio", or until no "Heartbeat" arrives within the timeout.
+static void handle_pause_stream_audio(obs_data_t *request, obs_data_t *response, void *)
+{
+    int timeout_ms = int(obs_data_get_int(request, "timeoutMs"));
+    if (timeout_ms <= 0)
+        timeout_ms = 3000;
+
+    if (!g_pause.pause(get_stream_tracks().tracks, timeout_ms)) {
+        set_error(response, "stream audio is already paused");
+        return;
+    }
+    obs_data_set_bool(response, "ok", true);
+}
+
+static void handle_heartbeat(obs_data_t *, obs_data_t *response, void *)
+{
+    g_pause.heartbeat();
+    obs_data_set_bool(response, "ok", true);
+    obs_data_set_bool(response, "streamAudioPaused", g_pause.paused());
+}
+
+static void handle_resume_stream_audio(obs_data_t *, obs_data_t *response, void *)
+{
+    g_pause.resume();
+    obs_data_set_bool(response, "ok", true);
+}
+
+// Put the tracks back before OBS saves the scene collection on exit.
+static void on_frontend_event(enum obs_frontend_event event, void *)
+{
+    if (event == OBS_FRONTEND_EVENT_EXIT || event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING)
+        g_pause.resume();
+}
+
 bool obs_module_load(void)
 {
     if (!tap_sockets_init()) {
         blog(LOG_ERROR, "[obs-audio-kit] socket setup failed");
         return false;
     }
+    obs_frontend_add_event_callback(on_frontend_event, nullptr);
     blog(LOG_INFO, "[obs-audio-kit] module loaded (version %s)", PLUGIN_VERSION);
     return true;
 }
@@ -91,10 +130,15 @@ void obs_module_post_load(void)
     obs_websocket_vendor_register_request(g_vendor, "GetInfo", handle_get_info, nullptr);
     obs_websocket_vendor_register_request(g_vendor, "StartTap", handle_start_tap, nullptr);
     obs_websocket_vendor_register_request(g_vendor, "StopTap", handle_stop_tap, nullptr);
+    obs_websocket_vendor_register_request(g_vendor, "PauseStreamAudio", handle_pause_stream_audio, nullptr);
+    obs_websocket_vendor_register_request(g_vendor, "Heartbeat", handle_heartbeat, nullptr);
+    obs_websocket_vendor_register_request(g_vendor, "ResumeStreamAudio", handle_resume_stream_audio, nullptr);
 }
 
 void obs_module_unload(void)
 {
+    obs_frontend_remove_event_callback(on_frontend_event, nullptr);
+    g_pause.resume();
     g_tap.stop();
     tap_sockets_shutdown();
     blog(LOG_INFO, "[obs-audio-kit] module unloaded");

@@ -16,6 +16,7 @@ find_package(obs-frontend-api REQUIRED)
 
 add_library(${CMAKE_PROJECT_NAME} MODULE
   src/plugin-main.cpp
+  src/stream-pause.cpp
   src/stream-tracks.cpp
   src/tap.cpp
 )
