@@ -73,7 +73,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 ### 一鍵安裝
 
-外掛的二進位檔打包在本工具裡，不另外下載。安裝流程：
+外掛的二進位檔打包在本工具裡，不另外下載（Windows 由 `src-tauri/tauri.windows.conf.json` 把建置好的 DLL 放進 App 資源）。只有 App 附的版本比 OBS 載入的（或已安裝檔案的）版本新時，才會提示安裝或更新；版本號以 `obs-plugin/buildspec.json` 為準。安裝流程：
 
 1. 偵測 OBS 版本和外掛資料夾
 2. OBS 正在執行時，請使用者關閉 OBS（Windows 上已載入的 DLL 無法覆寫，而且外掛要重開 OBS 才會載入）
@@ -102,6 +102,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 ### 待驗證
 
+- 一鍵安裝／更新流程（版本比對、等待關閉 OBS、一般權限安裝失敗時改用系統管理員權限、開啟 OBS、確認載入新版）在 Windows 上完整跑一次
 - 直播中時，從直播輸出的 mixer mask 讀取直播音軌（`streamTracksOrigin: "output"`）
 - 簡易輸出模式下的直播音軌判斷
 - 一般權限（非提權）的程式實際寫入 `C:\ProgramData\obs-studio\plugins` 是否成功（目前只從 ACL 推論）

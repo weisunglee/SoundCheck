@@ -13,6 +13,8 @@ export interface ObsAudioState {
   streamTracks: number[];
   /** False when the obs-audio-kit plugin isn't loaded; stream tracks then fall back to track 1. */
   pluginAvailable: boolean;
+  /** Version of the plugin OBS has loaded, or null when it isn't loaded. */
+  pluginVersion: string | null;
 }
 
 /** Names users see for OBS input kinds, per platform. */
@@ -156,15 +158,25 @@ export async function loadState(): Promise<ObsAudioState> {
 
   let streamTracks = [1];
   let pluginAvailable = false;
+  let pluginVersion: string | null = null;
   try {
-    const info = await pluginRequest<{ streamTracks: { track: number }[] }>("GetInfo");
+    const info = await pluginRequest<{ streamTracks: { track: number }[]; pluginVersion: string }>("GetInfo");
     streamTracks = info.streamTracks.map((t) => t.track);
     pluginAvailable = true;
+    pluginVersion = info.pluginVersion;
   } catch {
     // Without the plugin, assume the usual default of track 1.
   }
 
-  return { sources, scenes, sceneOrder, programScene: sceneList.currentProgramSceneName as string, streamTracks, pluginAvailable };
+  return {
+    sources,
+    scenes,
+    sceneOrder,
+    programScene: sceneList.currentProgramSceneName as string,
+    streamTracks,
+    pluginAvailable,
+    pluginVersion,
+  };
 }
 
 export interface ObsAudio {

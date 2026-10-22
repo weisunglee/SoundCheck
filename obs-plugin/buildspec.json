@@ -38,7 +38,7 @@
     },
     "name": "obs-audio-kit",
     "displayName": "obs-audio-kit OBS companion",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "author": "weisunglee",
     "website": "https://github.com/weisunglee/obs-audio-kit",
     "email": "https://github.com/weisunglee/obs-audio-kit/issues"

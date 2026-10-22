@@ -1,5 +1,6 @@
 mod loudness;
 mod obs_config;
+mod plugin_install;
 mod sound_test;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -9,6 +10,10 @@ pub fn run() {
         .manage(sound_test::SoundTestState::default())
         .invoke_handler(tauri::generate_handler![
             obs_config::read_obs_websocket_config,
+            plugin_install::plugin_status,
+            plugin_install::install_plugin,
+            plugin_install::install_plugin_elevated,
+            plugin_install::launch_obs,
             sound_test::sound_test_record,
             sound_test::sound_test_stop_recording,
             sound_test::sound_test_play,

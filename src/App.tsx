@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
 import { ChannelStrip } from "./components/ChannelStrip";
+import { PluginInstall } from "./components/PluginInstall";
 import { SceneList } from "./components/SceneList";
 import { SceneTable } from "./components/SceneTable";
 import { SoundTest } from "./components/SoundTest";
 import { useObsConnection } from "./obs";
 import { useObsAudio } from "./obsAudio";
+import { pluginNeed, usePluginStatus } from "./pluginStatus";
 import { itemsToShow, scenesContaining, sourceStatus } from "./status";
 import type { AudioSource } from "./types";
 
@@ -18,9 +20,13 @@ type View = "scene" | "table";
 export default function App() {
   const [view, setView] = useState<View>("scene");
   const [soundTestOpen, setSoundTestOpen] = useState(false);
+  const [pluginOpen, setPluginOpen] = useState(false);
   const connection = useObsConnection();
   const audio = useObsAudio(connection.kind === "connected");
   const { state, levels } = audio;
+  const pluginStatus = usePluginStatus(5000);
+  const need = pluginStatus ? pluginNeed(pluginStatus, state?.pluginVersion ?? null, state !== null) : "none";
+  const NEED_LABELS = { install: "安裝外掛", update: `更新外掛 ${pluginStatus?.bundledVersion}`, notLoaded: "外掛沒有載入" } as const;
 
   const lastSound = useRef<Record<string, number>>({});
   const now = performance.now();
@@ -49,6 +55,11 @@ export default function App() {
           </button>
         </div>
       )}
+      {need !== "none" && (
+        <button type="button" className="btn warn" onClick={() => setPluginOpen(true)}>
+          {NEED_LABELS[need]}
+        </button>
+      )}
       <button
         type="button"
         className="btn primary"
@@ -61,10 +72,15 @@ export default function App() {
     </header>
   );
 
+  const pluginDialog = pluginOpen && (
+    <PluginInstall obsConnected={state !== null} loadedVersion={state?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+  );
+
   if (!state) {
     return (
       <div className="app">
         {header}
+        {pluginDialog}
         <div className="empty">
           {connection.kind === "failed" ? (
             <>
@@ -112,7 +128,14 @@ export default function App() {
       {header}
       {audio.error && <div className="error-bar">{audio.error}</div>}
       {!state.pluginAvailable && (
-        <div className="notice-bar">沒有偵測到 obs-audio-kit 外掛：試音無法使用，「沒送到直播」先假設直播用的是音軌 1。</div>
+        <div className="notice-bar">
+          OBS 沒有載入 obs-audio-kit 外掛：試音無法使用，「沒送到直播」先假設直播用的是音軌 1。
+          {need !== "none" && (
+            <button type="button" className="link" onClick={() => setPluginOpen(true)}>
+              {NEED_LABELS[need]}
+            </button>
+          )}
+        </div>
       )}
 
       <div className="body">
@@ -182,6 +205,7 @@ export default function App() {
       </div>
 
       {soundTestOpen && <SoundTest onClose={() => setSoundTestOpen(false)} />}
+      {pluginDialog}
     </div>
   );
 }
