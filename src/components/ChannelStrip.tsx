@@ -9,6 +9,7 @@ const MONITOR_OPTIONS: { value: MonitorType; label: string }[] = [
 ];
 
 const SCALE_DB = [0, -10, -20, -30, -40, -50, -60];
+const FADER_MIN_DB = -60;
 
 interface Props {
   source: AudioSource;
@@ -16,21 +17,21 @@ interface Props {
   sounding: boolean;
   levels: ChannelLevels;
   streamTracks: number[];
-  onChange: (next: AudioSource) => void;
+  onVolume: (db: number) => void;
+  onMuted: (muted: boolean) => void;
+  onMonitorType: (type: MonitorType) => void;
+  onFilterEnabled: (filter: string, enabled: boolean) => void;
+  onAddStreamTracks: () => void;
   /** Un-hide the source in the current scene. */
   onShow: () => void;
 }
 
-export function ChannelStrip({ source, status, sounding, levels, streamTracks, onChange, onShow }: Props) {
-  const update = (patch: Partial<AudioSource>) => onChange({ ...source, ...patch });
-
-  const toggleFilter = (index: number) =>
-    update({
-      filters: source.filters.map((f, i) => (i === index ? { ...f, enabled: !f.enabled } : f)),
-    });
-
+export function ChannelStrip(props: Props) {
+  const { source, status, sounding, levels, streamTracks } = props;
   const heard = status === "live";
   const shownLevels: ChannelLevels = status === "hidden" ? [0, 0] : levels;
+  // OBS goes down to -100 dB (silent); the fader stops at -60.
+  const faderDb = Math.max(FADER_MIN_DB, Math.min(0, source.volumeDb));
 
   return (
     <div className={heard ? "strip" : "strip dimmed"}>
@@ -46,19 +47,15 @@ export function ChannelStrip({ source, status, sounding, levels, streamTracks, o
       {status === "hidden" && (
         <div className="hint">
           在這個場景裡被隱藏了，觀眾聽不到。
-          <button type="button" className="link" onClick={onShow}>
+          <button type="button" className="link" onClick={props.onShow}>
             顯示它
           </button>
         </div>
       )}
       {status === "offStream" && (
         <div className="hint">
-          只送到音軌 {source.tracks.join("、")}，直播用的是音軌 {streamTracks.join("、")}。
-          <button
-            type="button"
-            className="link"
-            onClick={() => update({ tracks: [...new Set([...source.tracks, ...streamTracks])].sort() })}
-          >
+          {source.tracks.length > 0 ? `只送到音軌 ${source.tracks.join("、")}` : "沒有送到任何音軌"}，直播用的是音軌 {streamTracks.join("、")}。
+          <button type="button" className="link" onClick={props.onAddStreamTracks}>
             加到直播音軌
           </button>
         </div>
@@ -78,23 +75,18 @@ export function ChannelStrip({ source, status, sounding, levels, streamTracks, o
         <div className="vol">
           <input
             type="range"
-            min={-60}
+            min={FADER_MIN_DB}
             max={0}
             step={0.5}
-            value={source.volumeDb}
+            value={faderDb}
             aria-label={`${source.name} 音量`}
-            onChange={(e) => update({ volumeDb: Number(e.target.value) })}
+            onChange={(e) => props.onVolume(Number(e.target.value))}
           />
-          <span className="db">{source.volumeDb.toFixed(1)} dB</span>
+          <span className="db">{source.volumeDb <= -100 ? "-∞ dB" : `${source.volumeDb.toFixed(1)} dB`}</span>
         </div>
       </div>
 
-      <button
-        className="mute"
-        type="button"
-        aria-pressed={source.muted}
-        onClick={() => update({ muted: !source.muted })}
-      >
+      <button className="mute" type="button" aria-pressed={source.muted} onClick={() => props.onMuted(!source.muted)}>
         {source.muted ? "已靜音（按一下取消）" : "靜音"}
       </button>
 
@@ -104,7 +96,7 @@ export function ChannelStrip({ source, status, sounding, levels, streamTracks, o
             key={opt.value}
             type="button"
             aria-pressed={source.monitorType === opt.value}
-            onClick={() => update({ monitorType: opt.value })}
+            onClick={() => props.onMonitorType(opt.value)}
           >
             {opt.label}
           </button>
@@ -113,20 +105,19 @@ export function ChannelStrip({ source, status, sounding, levels, streamTracks, o
 
       <div className="cap">濾鏡鏈</div>
       <div className="chain">
-        {source.filters.map((f, i) => (
+        {source.filters.length === 0 && <span className="hint">沒有音訊濾鏡</span>}
+        {source.filters.map((f) => (
           <button
             key={f.name}
             className="chip"
             type="button"
             aria-pressed={f.enabled}
-            onClick={() => toggleFilter(i)}
+            title={f.enabled ? "按一下停用" : "按一下啟用"}
+            onClick={() => props.onFilterEnabled(f.name, !f.enabled)}
           >
             {f.name}
           </button>
         ))}
-        <button className="chip add" type="button">
-          ＋ 人聲預設
-        </button>
       </div>
     </div>
   );

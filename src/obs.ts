@@ -1,6 +1,6 @@
 // Connection to the local OBS through obs-websocket, using OBS's own saved settings.
 import { invoke } from "@tauri-apps/api/core";
-import OBSWebSocket, { OBSWebSocketError } from "obs-websocket-js";
+import OBSWebSocket, { EventSubscription, OBSWebSocketError } from "obs-websocket-js";
 import { useCallback, useEffect, useState } from "react";
 
 interface WebsocketConfig {
@@ -23,7 +23,10 @@ async function connectLocal(): Promise<string> {
   if (!config) throw new Error("找不到 OBS 的設定。請先在這台電腦上開啟過一次 OBS。");
   if (!config.enabled) throw new Error("OBS 的 WebSocket 伺服器沒有開啟。請到 OBS「工具 → WebSocket 伺服器設定」勾選「啟用 WebSocket 伺服器」。");
   try {
-    await obs.connect(`ws://127.0.0.1:${config.port}`, config.password ?? undefined);
+    await obs.connect(`ws://127.0.0.1:${config.port}`, config.password ?? undefined, {
+      // Volume meters are a high-volume event and must be requested explicitly.
+      eventSubscriptions: EventSubscription.All | EventSubscription.InputVolumeMeters,
+    });
   } catch {
     throw new Error(`連不上 OBS（連接埠 ${config.port}）。請確認 OBS 正在執行。`);
   }

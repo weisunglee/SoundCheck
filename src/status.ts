@@ -1,4 +1,4 @@
-import type { AudioSource, Scene, SourceStatus } from "./types";
+import type { AudioSource, Scene, SceneItem, SourceStatus } from "./types";
 
 type Presence = "absent" | "hidden" | "visible";
 
@@ -48,4 +48,29 @@ export function scenesContaining(source: AudioSource, scenes: Scene[]): string[]
   return scenes
     .filter((s) => presenceInScene(s.name, source.name, scenes) !== "absent")
     .map((s) => s.name);
+}
+
+/**
+ * The hidden scene items to enable so `sourceName` becomes visible in `sceneName`:
+ * the source's own items plus any hidden nested scene or group on the way to them.
+ */
+export function itemsToShow(sceneName: string, sourceName: string, scenes: Scene[]): { sceneName: string; item: SceneItem }[] {
+  const byName = new Map(scenes.map((s) => [s.name, s]));
+  const found = new Map<string, { sceneName: string; item: SceneItem }>();
+
+  const walk = (name: string, path: { sceneName: string; item: SceneItem }[], seen: Set<string>) => {
+    const scene = byName.get(name);
+    if (!scene || seen.has(name)) return;
+    const next = new Set(seen).add(name);
+    for (const item of scene.items) {
+      const here = [...path, { sceneName: name, item }];
+      if (item.sourceName === sourceName) {
+        for (const step of here) if (!step.item.enabled) found.set(`${step.sceneName}/${step.item.id}`, step);
+      }
+      if (item.isScene) walk(item.sourceName, here, next);
+    }
+  };
+
+  walk(sceneName, [], new Set());
+  return [...found.values()];
 }

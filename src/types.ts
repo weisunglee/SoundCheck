@@ -6,6 +6,8 @@ export type MonitorType =
 
 export interface Filter {
   name: string;
+  /** OBS filter kind, e.g. "noise_gate_filter". */
+  kind: string;
   enabled: boolean;
 }
 
@@ -24,6 +26,8 @@ export interface AudioSource {
 }
 
 export interface SceneItem {
+  /** OBS sceneItemId, unique within its scene. */
+  id: number;
   sourceName: string;
   /** The eye toggle in OBS. */
   enabled: boolean;
@@ -34,10 +38,12 @@ export interface SceneItem {
 export interface Scene {
   name: string;
   items: SceneItem[];
+  /** Groups behave like nested scenes but are not listed as switchable scenes. */
+  isGroup?: boolean;
 }
 
 /** Why a source can or can't be heard on stream in the current program scene. */
 export type SourceStatus = "live" | "hidden" | "muted" | "offStream" | "notInScene";
 
-/** Per-channel level, 0..1 (linear, already mapped from dB for display). */
+/** Per-channel meter position, 0..1, linear in dB from -60 dBFS to 0 dBFS. */
 export type ChannelLevels = [number, number];

@@ -3,12 +3,12 @@ import { ChannelStrip } from "./components/ChannelStrip";
 import { SceneList } from "./components/SceneList";
 import { SceneTable } from "./components/SceneTable";
 import { SoundTest } from "./components/SoundTest";
-import { mockScenes, mockSources, mockStreamTracks, mockSwitchableScenes, useMockLevels } from "./mock";
 import { useObsConnection } from "./obs";
-import { scenesContaining, sourceStatus } from "./status";
-import type { AudioSource, Scene } from "./types";
+import { useObsAudio } from "./obsAudio";
+import { itemsToShow, scenesContaining, sourceStatus } from "./status";
+import type { AudioSource } from "./types";
 
-/** A level above this counts as "making sound". */
+/** A meter position above this (about -57 dBFS) counts as "making sound". */
 const SOUND_THRESHOLD = 0.05;
 /** Keep showing "making sound" this long after the last loud moment, so pauses in speech don't flicker. */
 const SOUND_HOLD_MS = 1500;
@@ -16,14 +16,11 @@ const SOUND_HOLD_MS = 1500;
 type View = "scene" | "table";
 
 export default function App() {
-  const [sources, setSources] = useState<AudioSource[]>(mockSources);
-  const [scenes, setScenes] = useState<Scene[]>(mockScenes);
-  const [programScene, setProgramScene] = useState("遊戲");
   const [view, setView] = useState<View>("scene");
   const [soundTestOpen, setSoundTestOpen] = useState(false);
   const connection = useObsConnection();
-  const levels = useMockLevels(sources);
-  const streamTracks = mockStreamTracks;
+  const audio = useObsAudio(connection.kind === "connected");
+  const { state, levels } = audio;
 
   const lastSound = useRef<Record<string, number>>({});
   const now = performance.now();
@@ -32,28 +29,58 @@ export default function App() {
   }
   const sounding = (name: string) => now - (lastSound.current[name] ?? -Infinity) < SOUND_HOLD_MS;
 
-  const statusIn = (s: AudioSource, scene: string) => sourceStatus(s, scene, scenes, streamTracks);
+  const header = (
+    <header className="bar">
+      <span className="brand">obs-audio-kit</span>
+      <span className={`conn conn-${connection.kind}`} title={connection.kind === "failed" ? connection.message : undefined}>
+        <i />
+        {connection.kind === "connected" && `已連線本機 OBS ${connection.obsVersion}`}
+        {connection.kind === "connecting" && "正在連線 OBS…"}
+        {connection.kind === "failed" && connection.message}
+      </span>
+      <span className="spacer" />
+      {state && (
+        <div className="tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={view === "scene"} onClick={() => setView("scene")}>
+            目前場景
+          </button>
+          <button type="button" role="tab" aria-selected={view === "table"} onClick={() => setView("table")}>
+            所有場景對照
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        className="btn primary"
+        disabled={!state?.pluginAvailable}
+        title={!state ? "連上 OBS 後才能試音" : !state.pluginAvailable ? "試音需要 obs-audio-kit 外掛" : undefined}
+        onClick={() => setSoundTestOpen(true)}
+      >
+        試音
+      </button>
+    </header>
+  );
 
-  const replace = (next: AudioSource) =>
-    setSources((prev) => prev.map((s) => (s.name === next.name ? next : s)));
-
-  // Enables every item for `sourceName` inside the program scene, including nested scenes.
-  const showInProgram = (sourceName: string) => {
-    const inTree = new Set<string>();
-    const collect = (name: string) => {
-      if (inTree.has(name)) return;
-      inTree.add(name);
-      scenes.find((s) => s.name === name)?.items.forEach((i) => i.isScene && collect(i.sourceName));
-    };
-    collect(programScene);
-    setScenes((prev) =>
-      prev.map((sc) =>
-        inTree.has(sc.name)
-          ? { ...sc, items: sc.items.map((i) => (i.sourceName === sourceName ? { ...i, enabled: true } : i)) }
-          : sc,
-      ),
+  if (!state) {
+    return (
+      <div className="app">
+        {header}
+        <div className="empty">
+          {connection.kind === "failed" ? (
+            <>
+              <h2>還沒連上 OBS</h2>
+              <p>{connection.message}</p>
+            </>
+          ) : (
+            <p>{audio.error ?? "正在讀取 OBS 的聲音設定…"}</p>
+          )}
+        </div>
+      </div>
     );
-  };
+  }
+
+  const { sources, scenes, sceneOrder, programScene, streamTracks } = state;
+  const statusIn = (s: AudioSource, scene: string) => sourceStatus(s, scene, scenes, streamTracks);
 
   const withStatus = sources.map((s) => ({ source: s, status: statusIn(s, programScene) }));
   const heard = withStatus.filter((x) => x.status === "live");
@@ -61,9 +88,7 @@ export default function App() {
   const notHeard = withStatus.filter((x) => x.status !== "live" && x.status !== "notInScene");
   const elsewhere = withStatus.filter((x) => x.status === "notInScene");
 
-  const heardCount = Object.fromEntries(
-    mockSwitchableScenes.map((sc) => [sc, sources.filter((s) => statusIn(s, sc) === "live").length]),
-  );
+  const heardCount = Object.fromEntries(sceneOrder.map((sc) => [sc, sources.filter((s) => statusIn(s, sc) === "live").length]));
 
   const strip = ({ source, status }: (typeof withStatus)[number]) => (
     <ChannelStrip
@@ -73,49 +98,25 @@ export default function App() {
       sounding={sounding(source.name)}
       levels={levels[source.name] ?? [0, 0]}
       streamTracks={streamTracks}
-      onChange={replace}
-      onShow={() => showInProgram(source.name)}
+      onVolume={(db) => audio.setVolume(source.name, db)}
+      onMuted={(m) => audio.setMuted(source.name, m)}
+      onMonitorType={(t) => audio.setMonitorType(source.name, t)}
+      onFilterEnabled={(f, on) => audio.setFilterEnabled(source.name, f, on)}
+      onAddStreamTracks={() => audio.addStreamTracks(source.name)}
+      onShow={() => audio.showInProgram(itemsToShow(programScene, source.name, scenes))}
     />
   );
 
   return (
     <div className="app">
-      <header className="bar">
-        <span className="brand">obs-audio-kit</span>
-        <span className={`conn conn-${connection.kind}`} title={connection.kind === "failed" ? connection.message : undefined}>
-          <i />
-          {connection.kind === "connected" && `已連線本機 OBS ${connection.obsVersion}`}
-          {connection.kind === "connecting" && "正在連線 OBS…"}
-          {connection.kind === "failed" && connection.message}
-        </span>
-        <span className="mock-note">混音器目前是假資料</span>
-        <span className="spacer" />
-        <button
-          type="button"
-          className="btn primary"
-          disabled={connection.kind !== "connected"}
-          title={connection.kind !== "connected" ? "連上 OBS 後才能試音" : undefined}
-          onClick={() => setSoundTestOpen(true)}
-        >
-          試音
-        </button>
-        <div className="tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={view === "scene"} onClick={() => setView("scene")}>
-            目前場景
-          </button>
-          <button type="button" role="tab" aria-selected={view === "table"} onClick={() => setView("table")}>
-            所有場景對照
-          </button>
-        </div>
-      </header>
+      {header}
+      {audio.error && <div className="error-bar">{audio.error}</div>}
+      {!state.pluginAvailable && (
+        <div className="notice-bar">沒有偵測到 obs-audio-kit 外掛：試音無法使用，「沒送到直播」先假設直播用的是音軌 1。</div>
+      )}
 
       <div className="body">
-        <SceneList
-          scenes={mockSwitchableScenes}
-          programScene={programScene}
-          heardCount={heardCount}
-          onSwitch={setProgramScene}
-        />
+        <SceneList scenes={sceneOrder} programScene={programScene} heardCount={heardCount} onSwitch={audio.switchScene} />
 
         <main className="main">
           {view === "scene" ? (
@@ -132,10 +133,12 @@ export default function App() {
                 </p>
               </section>
 
-              <section>
-                <h4 className="section-title">觀眾聽得到</h4>
-                <div className="mixer">{heard.map(strip)}</div>
-              </section>
+              {heard.length > 0 && (
+                <section>
+                  <h4 className="section-title">觀眾聽得到</h4>
+                  <div className="mixer">{heard.map(strip)}</div>
+                </section>
+              )}
 
               {notHeard.length > 0 && (
                 <section>
@@ -149,7 +152,7 @@ export default function App() {
                   <h4 className="section-title">其他場景的聲音</h4>
                   <ul className="elsewhere">
                     {elsewhere.map(({ source }) => {
-                      const where = scenesContaining(source, scenes).filter((n) => mockSwitchableScenes.includes(n));
+                      const where = scenesContaining(source, scenes).filter((n) => sceneOrder.includes(n));
                       return (
                         <li key={source.name}>
                           <div>
@@ -157,12 +160,13 @@ export default function App() {
                             <div className="dev">{source.device}</div>
                           </div>
                           <div className="where">
-                            在
-                            {where.map((n) => (
-                              <button key={n} type="button" className="chip" onClick={() => setProgramScene(n)}>
-                                切到{n}
-                              </button>
-                            ))}
+                            {where.length === 0
+                              ? "沒有放在任何場景裡"
+                              : where.map((n) => (
+                                  <button key={n} type="button" className="chip" onClick={() => audio.switchScene(n)}>
+                                    切到{n}
+                                  </button>
+                                ))}
                           </div>
                         </li>
                       );
@@ -172,13 +176,7 @@ export default function App() {
               )}
             </>
           ) : (
-            <SceneTable
-              sources={sources}
-              scenes={mockSwitchableScenes}
-              programScene={programScene}
-              statusIn={statusIn}
-              onSwitch={setProgramScene}
-            />
+            <SceneTable sources={sources} scenes={sceneOrder} programScene={programScene} statusIn={statusIn} onSwitch={audio.switchScene} />
           )}
         </main>
       </div>
