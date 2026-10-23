@@ -147,6 +147,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
                 </Step>
 
                 <Step n={2} title={t("安裝外掛 {version}", { version: bundled })} state={installStep}>
+                  {status.legacyInstalled && <p className="hint">{t("這次會一併移除改名前的舊版外掛（obs-audio-kit）。")}</p>}
                   {install.kind === "error" && install.error.kind === "permissionDenied" ? (
                     <>
                       <div className="verdict verdict-warn">{install.error.message}</div>

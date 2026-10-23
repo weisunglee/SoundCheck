@@ -7,7 +7,6 @@ import { pluginRequest } from "./obs";
 export interface StreamLevel {
   /** Peak per channel since the last update, 0..1. */
   peaks: [number, number];
-  momentaryLufs: number | null;
   shortTermLufs: number | null;
 }
 

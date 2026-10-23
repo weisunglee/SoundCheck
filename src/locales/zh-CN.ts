@@ -348,6 +348,7 @@ const table: Record<string, string> = {
   "要連線的直播軟體": "要连接的直播软件",
   "Streamlabs 沒有在執行，或還沒準備好。": "Streamlabs 没有在运行，或还没准备好。",
   "連不上 Streamlabs。": "连不上 Streamlabs。",
+  "這次會一併移除改名前的舊版外掛（obs-audio-kit）。": "这次会一并移除改名前的旧版插件（obs-audio-kit）。",
 };
 
 export default table;

@@ -142,13 +142,6 @@ export function retryConnection() {
 }
 
 /**
- * Connects on mount and keeps trying until connected. Retries come from three places,
- * because the webview's own timer is throttled while the window is in the background:
- * - the native OBS watcher (`obs-presence`), which fires as soon as OBS's WebSocket is reachable
- * - the window becoming visible again
- * - a 3-second timer after each failed or dropped connection
- */
-/**
  * Connects on mount and keeps trying until connected, to OBS or Streamlabs as the user chose
  * ("auto" picks whichever is running, OBS first). Retries come from three places, because the
  * webview's own timer is throttled while the window is in the background:

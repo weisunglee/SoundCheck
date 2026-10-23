@@ -32,7 +32,6 @@ pub type SoundTestState = Arc<SoundTest>;
 #[serde(rename_all = "camelCase")]
 struct PlaybackEvent {
     position_sec: f64,
-    duration_sec: f64,
 }
 
 /// Records up to `seconds` (capped at 15) of the stream mix from the live tap, or until stopped.
@@ -97,11 +96,10 @@ fn play(app: &AppHandle, test: &SoundTest) -> Result<(), String> {
     }?;
     stream.play().map_err(|e| e.to_string())?;
 
-    let duration_sec = (samples.len() / CHANNELS) as f64 / f64::from(SAMPLE_RATE);
     while !finished.load(Ordering::SeqCst) && !test.stop_playback.load(Ordering::SeqCst) {
         std::thread::sleep(Duration::from_millis(50));
         let position_sec = *position.lock().unwrap() / f64::from(SAMPLE_RATE);
-        let _ = app.emit("sound-test-playback", PlaybackEvent { position_sec, duration_sec });
+        let _ = app.emit("sound-test-playback", PlaybackEvent { position_sec });
     }
     drop(stream);
     Ok(())

@@ -348,6 +348,7 @@ const table: Record<string, string> = {
   "要連線的直播軟體": "接続する配信ソフト",
   "Streamlabs 沒有在執行，或還沒準備好。": "Streamlabs が起動していないか、まだ準備ができていません。",
   "連不上 Streamlabs。": "Streamlabs に接続できません。",
+  "這次會一併移除改名前的舊版外掛（obs-audio-kit）。": "改名前の旧プラグイン（obs-audio-kit）も一緒に削除します。",
 };
 
 export default table;

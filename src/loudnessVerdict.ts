@@ -4,12 +4,12 @@
 // reference; they should be tuned with more real recordings.
 import { t } from "./i18n";
 
-export const TOO_QUIET_LUFS = -24;
-export const TOO_LOUD_LUFS = -10;
+const TOO_QUIET_LUFS = -24;
+const TOO_LOUD_LUFS = -10;
 /** Peaks above this are about to clip. */
-export const CLIP_DBFS = -1;
+const CLIP_DBFS = -1;
 
-export type Tone = "ok" | "warn" | "bad";
+type Tone = "ok" | "warn" | "bad";
 
 export function loudnessVerdict(lufs: number | null, peakDbfs: number | null, clipped = false): { tone: Tone; text: string } {
   if (peakDbfs === null || lufs === null) {

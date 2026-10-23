@@ -119,7 +119,7 @@ fn integrated_loudness(samples: &[f32]) -> Option<f64> {
     Some(block_loudness(relative))
 }
 
-/// Loudness of a live stream, updated every 100 ms (BS.1770 momentary and short-term, ungated).
+/// Loudness of a live stream, updated every 100 ms (BS.1770 short-term, ungated).
 pub struct LiveLoudness {
     filters: Vec<(Biquad, Biquad)>,
     step_energy: f64,
@@ -129,8 +129,6 @@ pub struct LiveLoudness {
 
 /// One 100 ms update of [`LiveLoudness`].
 pub struct LiveReading {
-    /// Last 400 ms, LUFS; `None` when silent.
-    pub momentary: Option<f64>,
     /// Last 3 s, LUFS; `None` when silent.
     pub short_term: Option<f64>,
 }
@@ -180,7 +178,7 @@ impl LiveLoudness {
             let mean = energy / (n * STEP_FRAMES) as f64;
             (mean > 0.0).then(|| block_loudness(mean)).filter(|l| *l > -70.0)
         };
-        LiveReading { momentary: over(4), short_term: over(SHORT_TERM_STEPS) }
+        LiveReading { short_term: over(SHORT_TERM_STEPS) }
     }
 }
 
@@ -229,7 +227,6 @@ mod tests {
         assert_eq!(readings.len(), 30);
         let last = readings.last().unwrap();
         assert!((last.short_term.unwrap() + 20.0).abs() < 0.3, "got {:?}", last.short_term);
-        assert!((last.momentary.unwrap() + 20.0).abs() < 0.3);
         assert!(live.push(&vec![0.0; 48_000 * 2 * 4]).last().unwrap().short_term.is_none());
     }
 

@@ -1295,10 +1295,6 @@ body,
   stroke-width: 2;
 }
 
-.curve-dot {
-  fill: var(--ok);
-}
-
 /* ---------- add source ---------- */
 
 .inputs-missing {

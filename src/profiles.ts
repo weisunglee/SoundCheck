@@ -4,7 +4,7 @@ import { obs } from "./obs";
 import type { AudioSource, MonitorType } from "./types";
 import { t } from "./i18n";
 
-export const PROFILE_VERSION = 1;
+const PROFILE_VERSION = 1;
 /** Older automatic backups (saved right before applying a profile) beyond this many are deleted. */
 export const BACKUPS_KEPT = 5;
 

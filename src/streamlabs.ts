@@ -31,10 +31,6 @@ class StreamlabsClient {
     }).catch(() => {});
   }
 
-  get connected() {
-    return this.connection !== null;
-  }
-
   async connect() {
     this.connection = await invoke<number>("slobs_connect");
   }

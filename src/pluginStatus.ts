@@ -6,7 +6,8 @@ export interface PluginStatus {
   bundledVersion: string | null;
   installed: boolean;
   installedVersion: string | null;
-  installPath: string;
+  /** The plugin from before the rename (obs-audio-kit) is still there; installing removes it. */
+  legacyInstalled: boolean;
   obsRunning: boolean;
   enabledInPluginManager: boolean | null;
 }

@@ -40,7 +40,6 @@ struct Recording {
 struct StreamLevel {
     /// Peak per channel since the last update, 0..1.
     peaks: [f32; CHANNELS],
-    momentary_lufs: Option<f64>,
     short_term_lufs: Option<f64>,
 }
 
@@ -114,7 +113,7 @@ impl StreamTap {
             if let Some(reading) = live.push(&samples).pop() {
                 let _ = app.emit(
                     "stream-level",
-                    StreamLevel { peaks, momentary_lufs: reading.momentary, short_term_lufs: reading.short_term },
+                    StreamLevel { peaks, short_term_lufs: reading.short_term },
                 );
                 peaks = [0.0; CHANNELS];
             }

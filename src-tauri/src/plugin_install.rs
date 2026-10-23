@@ -40,7 +40,6 @@ pub struct PluginStatus {
     installed: bool,
     /// Read from the installed file; `None` if not installed or it carries no version.
     installed_version: Option<String>,
-    install_path: String,
     obs_running: bool,
     /// From OBS 32's plugin manager; `None` when OBS has no record of the plugin yet.
     enabled_in_plugin_manager: Option<bool>,
@@ -82,7 +81,6 @@ fn obs_config_dir() -> Option<PathBuf> {
     Some(dirs::config_dir()?.join("obs-studio"))
 }
 
-/// The installed plugin file (Windows/Linux) or bundle (macOS).
 /// Where the plugin lived before it was renamed from obs-audio-kit to soundcheck.
 fn legacy_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
@@ -100,6 +98,7 @@ fn legacy_path() -> Option<PathBuf> {
     }
 }
 
+/// The installed plugin file (Windows/Linux) or bundle (macOS).
 fn install_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -170,7 +169,6 @@ pub fn plugin_status(app: AppHandle) -> PluginStatus {
         bundled_version: bundled_path(&app).map(|_| BUNDLED_VERSION.to_string()),
         installed,
         installed_version: if installed { path.as_deref().and_then(file_version) } else { None },
-        install_path: path.map(|p| p.display().to_string()).unwrap_or_default(),
         obs_running: obs_running(),
         enabled_in_plugin_manager: enabled_in_plugin_manager(),
         legacy_installed: legacy_path().is_some_and(|p| p.exists()),
