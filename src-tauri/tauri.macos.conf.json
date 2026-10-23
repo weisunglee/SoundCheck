@@ -1,8 +1,5 @@
 {
   "bundle": {
-    "resources": {
-      "../obs-plugin/build_macos/RelWithDebInfo/soundcheck.plugin": "obs-plugin/soundcheck.plugin"
-    },
     "macOS": {
       "signingIdentity": "-",
       "minimumSystemVersion": "12.0"

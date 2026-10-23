@@ -92,7 +92,8 @@ jobs:
           - name: macOS
             # Xcode 16 (macOS 15 SDK) is what OBS's plugin build requires.
             os: macos-15
-            args: --target universal-apple-darwin
+            # Bundles the plugin built below; local macOS builds go without it (it needs Xcode 16).
+            args: --target universal-apple-darwin --config src-tauri/tauri.macos-plugin.conf.json
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -132,7 +133,7 @@ jobs:
         run: |
           cmake --preset macos
           cmake --build build_macos --config RelWithDebInfo
-          # tauri.macos.conf.json bundles the plugin from this path.
+          # tauri.macos-plugin.conf.json bundles the plugin from this path.
           expected=build_macos/RelWithDebInfo/soundcheck.plugin
           if [ ! -d "$expected" ]; then
             echo "::error::$expected not found; plugin bundles in the build folder:"
