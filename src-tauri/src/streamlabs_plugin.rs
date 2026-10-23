@@ -40,7 +40,7 @@ fn install_path() -> Option<PathBuf> {
 }
 
 fn control_path() -> Option<PathBuf> {
-    Some(plugins_base()?.join("data").join("obs-plugins").join(MODULE).join("control.json"))
+    Some(data_dir()?.join("control.json"))
 }
 
 fn bundled_path(app: &AppHandle) -> Option<PathBuf> {
@@ -74,7 +74,7 @@ pub fn streamlabs_plugin_status(app: AppHandle) -> StreamlabsPluginStatus {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallError {
-    /// "streamlabsRunning" (the old version is loaded and locked), "notBundled" or "failed".
+    /// "streamlabsRunning" (Streamlabs has the plugin loaded, so its file is locked), "notBundled" or "failed".
     kind: &'static str,
     message: String,
 }
@@ -110,6 +110,32 @@ pub fn install_streamlabs_plugin(app: AppHandle) -> Result<(), InstallError> {
         )),
         _ => Ok(()),
     }
+}
+
+fn data_dir() -> Option<PathBuf> {
+    Some(plugins_base()?.join("data").join("obs-plugins").join(MODULE))
+}
+
+/// Removes the plugin and its data folder. Fails with "streamlabsRunning" while Streamlabs has
+/// it loaded (the file is locked until Streamlabs closes).
+#[tauri::command]
+pub fn uninstall_streamlabs_plugin() -> Result<(), InstallError> {
+    if let Some(dll) = install_path().filter(|p| p.exists()) {
+        if let Err(e) = std::fs::remove_file(&dll) {
+            let locked = matches!(e.raw_os_error(), Some(5) | Some(32) | Some(1224)) || e.kind() == std::io::ErrorKind::PermissionDenied;
+            return Err(if locked {
+                InstallError::new("streamlabsRunning", tr("直播軟體正在使用外掛。請先關閉直播軟體再移除。"))
+            } else {
+                InstallError::new("failed", trf("移除外掛失敗：{e}", &[("e", &e)]))
+            });
+        }
+    }
+    // Drop the connection to a plugin that is going away, and its control file.
+    *CONNECTION.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    if let Some(dir) = data_dir().filter(|p| p.exists()) {
+        std::fs::remove_dir_all(&dir).map_err(|e| InstallError::new("failed", trf("移除外掛失敗：{e}", &[("e", &e)])))?;
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]

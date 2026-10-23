@@ -3,7 +3,7 @@ import { type AddSourceStart, AddSourceWizard } from "./components/AddSourceWiza
 import { ChannelStrip } from "./components/ChannelStrip";
 import { ConnectionGuide } from "./components/ConnectionGuide";
 import { FilterWizard } from "./components/FilterWizard";
-import { Icon } from "./components/Icon";
+import { Icon, IconButton } from "./components/Icon";
 import { PluginInstall } from "./components/PluginInstall";
 import { ProfilesDialog } from "./components/ProfilesDialog";
 import { SceneList } from "./components/SceneList";
@@ -22,6 +22,7 @@ import { assessPlugin, createPlugin, pluginApplies, usePluginFiles, usePluginInf
 import { streamlabsAdapter } from "./streamlabsAdapter";
 import { SoundHold, type SourceWithStatus, itemsToHide, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
+import { type ThemeChoice, useTheme } from "./theme";
 import type { SoftwareId } from "./software";
 import type { AudioSource } from "./types";
 import { LANGUAGES, type Lang, t, useLanguage } from "./i18n";
@@ -31,6 +32,7 @@ type View = "scene" | "table";
 export default function App() {
   // Subscribing here re-renders the whole app when the language changes.
   const { lang, setLang } = useLanguage();
+  const [theme, setTheme] = useTheme();
   const [view, setView] = useState<View>("scene");
   const [soundTestOpen, setSoundTestOpen] = useState(false);
   // The software the install dialog is for, fixed when it opens: it must not switch to OBS's
@@ -115,6 +117,10 @@ export default function App() {
           {NEED_LABELS[need]}
         </button>
       )}
+      {need === "none" && pluginFiles && pluginApplies(connection) && (pluginFiles.installed || pluginFiles.legacyInstalled) && (
+        // Nothing to do, but the dialog is where the plugin can be removed.
+        <IconButton icon="plug" label={t("直播軟體外掛")} onClick={() => openPluginDialog()} />
+      )}
       {caps.plugin && (
       <button
         type="button"
@@ -130,6 +136,14 @@ export default function App() {
       </button>
       )}
       <SoftwarePicker compact />
+      <label className="with-icon" title={t("主題")}>
+        <Icon name="sun-moon" size={15} />
+        <select className="select" aria-label={t("主題")} value={theme} onChange={(e) => setTheme(e.target.value as ThemeChoice)}>
+          <option value="system">{t("跟隨系統")}</option>
+          <option value="light">{t("淺色")}</option>
+          <option value="dark">{t("深色")}</option>
+        </select>
+      </label>
       <label className="with-icon" title={t("語言")}>
         <Icon name="globe" size={15} />
         <select className="select" aria-label={t("語言")} value={lang} onChange={(e) => setLang(e.target.value as Lang)}>

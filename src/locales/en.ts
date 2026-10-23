@@ -349,6 +349,18 @@ const table: Record<string, string> = {
   "換一種聲音": "Choose another kind of sound",
   "新增聲音": "Add sound",
   "重新選擇": "Choose again",
+  "主題": "Theme",
+  "跟隨系統": "System",
+  "淺色": "Light",
+  "深色": "Dark",
+  "不監聽": "Off",
+  "已移除外掛。": "Plugin removed.",
+  "用系統管理員權限移除": "Remove with administrator rights",
+  "直播軟體外掛": "Streaming software plugin",
+  "移除中…": "Removing…",
+  "移除外掛": "Remove plugin",
+  "移除後就不能用試音和直播音量表，之後可以隨時再安裝。": "Without it, the sound test and stream meter won't work. You can install it again any time.",
+  "請先關閉直播軟體再移除。": "Close the streaming software before removing it.",
 };
 
 export default table;

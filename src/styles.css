@@ -1,4 +1,5 @@
 :root {
+  /* Dark theme (the default when the system has no preference). */
   --bg: #14171c;
   --panel: #1c2027;
   --raised: #262b34;
@@ -9,6 +10,12 @@
   --ok: #3ccf7f;
   --warn: #f2c14e;
   --hot: #ff5a4f;
+  /* Text on an accent, ok or hot background, and the dialog shadow. */
+  --on-accent: #0b1220;
+  --on-ok: #0b1a10;
+  --on-hot: #fff;
+  --hot-fg: #ffd9d6;
+  --shadow: rgb(0 0 0 / 0.45);
   --font-body: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
@@ -17,6 +24,47 @@
   font-size: 13px;
   color: var(--fg);
   background: var(--bg);
+}
+
+/* Light theme: chosen in the app, or following the system unless dark was chosen. */
+:root[data-theme="light"] {
+  --bg: #f3f4f7;
+  --panel: #ffffff;
+  --raised: #eceef2;
+  --line: #d5d9e0;
+  --fg: #1a1e26;
+  --muted: #5c6575;
+  --accent: #2563d6;
+  --ok: #17904f;
+  --warn: #a86a0c;
+  --hot: #d6362b;
+  --on-accent: #ffffff;
+  --on-ok: #ffffff;
+  --on-hot: #ffffff;
+  --hot-fg: #9b1d14;
+  --shadow: rgb(20 30 50 / 0.18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f4f7;
+    --panel: #ffffff;
+    --raised: #eceef2;
+    --line: #d5d9e0;
+    --fg: #1a1e26;
+    --muted: #5c6575;
+    --accent: #2563d6;
+    --ok: #17904f;
+    --warn: #a86a0c;
+    --hot: #d6362b;
+    --on-accent: #ffffff;
+    --on-ok: #ffffff;
+    --on-hot: #ffffff;
+    --hot-fg: #9b1d14;
+    --shadow: rgb(20 30 50 / 0.18);
+    color-scheme: light;
+  }
 }
 
 * {
@@ -152,7 +200,7 @@ input {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0b1220;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -162,6 +210,54 @@ input {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 12px;
+}
+
+/*
+ * Each card spans the same seven rows of the mixer grid (subgrid), so a row of cards shares
+ * the height of every section: faders, mute buttons and monitoring line up across cards no
+ * matter which card has a longer name or a status hint.
+ */
+.mixer > .strip {
+  /* The column decides the width, never the content (a long name, a wide control). */
+  min-width: 0;
+  grid-row: span 7;
+  grid-template-rows: subgrid;
+  row-gap: 10px;
+}
+
+.strip-head {
+  grid-row: 1;
+}
+.strip-status {
+  grid-row: 2;
+}
+.strip .fader {
+  grid-row: 3;
+}
+.strip .mute {
+  grid-row: 4;
+}
+.strip-monitor {
+  grid-row: 5;
+}
+.strip-more {
+  grid-row: 6;
+}
+.strip-filters {
+  grid-row: 7;
+}
+
+.strip > * {
+  min-width: 0;
+}
+
+.strip-status,
+.strip-monitor,
+.strip-more,
+.strip-filters {
+  display: grid;
+  gap: 6px;
+  align-content: start;
 }
 
 .strip {
@@ -215,11 +311,26 @@ input {
   justify-content: space-between;
   align-items: start;
   gap: 8px;
+  min-height: 36px;
+}
+
+/* One line each, so a long name can't push the card's controls down. */
+.strip-title {
+  min-width: 0;
 }
 
 .strip h3 {
   margin: 0;
   font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strip-title .dev {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fader {
@@ -329,7 +440,7 @@ input {
 .mute[aria-pressed="true"] {
   background: color-mix(in srgb, var(--hot) 28%, var(--raised));
   border-color: var(--hot);
-  color: #ffd9d6;
+  color: var(--hot-fg);
 }
 
 .seg {
@@ -343,18 +454,22 @@ input {
 
 .seg button {
   font-size: 11px;
-  white-space: nowrap;
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
   border: 0;
   background: none;
   color: var(--muted);
-  padding: 4px 0;
+  padding: 4px 2px;
   border-radius: 6px;
   cursor: pointer;
 }
 
 .seg button[aria-pressed="true"] {
-  background: var(--raised);
+  background: var(--panel);
   color: var(--fg);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .cap {
@@ -495,7 +610,7 @@ body,
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #fff;
+  color: var(--on-hot);
   background: var(--hot);
   border-radius: 4px;
   padding: 1px 6px;
@@ -915,7 +1030,7 @@ body,
   padding: 18px 20px 20px;
   display: grid;
   gap: 12px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
+  box-shadow: 0 20px 60px var(--shadow);
 }
 
 .dialog-head {
@@ -1133,7 +1248,7 @@ body,
 .step-done .step-n {
   background: var(--ok);
   border-color: var(--ok);
-  color: #0b1a10;
+  color: var(--on-ok);
 }
 
 .step-body {
@@ -1546,4 +1661,18 @@ body,
   .strip.flash {
     animation: none;
   }
+}
+
+/* Removing the plugin, at the bottom of the install dialogs. */
+.uninstall {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.uninstall .section-title {
+  margin: 0;
 }

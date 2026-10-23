@@ -10,9 +10,20 @@ mod streamlabs_plugin;
 mod stream_tap;
 mod system_audio;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Registered first, so a second start hands over to the running app before anything else
+        // starts: two copies would both drive the streaming software and the plugin.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .manage(sound_test::SoundTestState::default())
         .manage(stream_tap::StreamTapState::default())
@@ -32,10 +43,13 @@ pub fn run() {
             plugin_install::plugin_status,
             plugin_install::install_plugin,
             plugin_install::install_plugin_elevated,
+            plugin_install::uninstall_plugin,
+            plugin_install::uninstall_plugin_elevated,
             plugin_install::launch_obs,
             plugin_install::log_install_event,
             streamlabs_plugin::streamlabs_plugin_status,
             streamlabs_plugin::install_streamlabs_plugin,
+            streamlabs_plugin::uninstall_streamlabs_plugin,
             streamlabs_plugin::streamlabs_plugin_request,
             profiles::profiles_list,
             profiles::profile_save,

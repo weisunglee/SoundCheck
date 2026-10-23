@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { outputsActive } from "../obsAdapter";
 import { assessPlugin, usePluginFiles } from "../plugin";
 import { IconButton } from "./Icon";
+import { PluginUninstall } from "./PluginUninstall";
 import { t } from "../i18n";
 
 interface InstallError {
@@ -56,10 +57,13 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
   const [install, setInstall] = useState<InstallState>({ kind: "idle" });
   const [launching, setLaunching] = useState<string | null>(null);
   const outputs = useOutputsActive(obsConnected);
+  const [removed, setRemoved] = useState(false);
   const lastLogged = useRef("");
 
   const bundled = status?.bundledVersion ?? null;
-  const { fileCurrent, loadedCurrent } = status ? assessPlugin(status, loadedVersion, obsConnected) : { fileCurrent: false, loadedCurrent: false };
+  const { fileCurrent, loadedCurrent, need } = status
+    ? assessPlugin(status, loadedVersion, obsConnected)
+    : { fileCurrent: false, loadedCurrent: false, need: "none" as const };
   const installed = install.kind === "done" || fileCurrent;
   const finished = installed && loadedCurrent;
 
@@ -102,7 +106,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="plugin-title">
       <div className="dialog">
         <div className="dialog-head">
-          <h2 id="plugin-title">{status.installed ? t("更新直播軟體外掛") : t("安裝直播軟體外掛")}</h2>
+          <h2 id="plugin-title">{!status.installed ? t("安裝直播軟體外掛") : need === "update" ? t("更新直播軟體外掛") : t("直播軟體外掛")}</h2>
           <IconButton icon="x" label={t("關閉")} className="close" onClick={() => (logEvent("closed dialog"), onClose())} />
         </div>
         <p className="dialog-lead">
@@ -195,6 +199,14 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
               </ol>
             )}
           </>
+        )}
+
+        {(status.installed || status.legacyInstalled || removed) && (
+          <PluginUninstall
+            software="obs"
+            blocked={status.running ? t("請先關閉直播軟體再移除。") : null}
+            onRemoved={() => (logEvent("removed plugin"), setRemoved(true))}
+          />
         )}
       </div>
     </div>

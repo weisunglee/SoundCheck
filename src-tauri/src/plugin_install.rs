@@ -293,56 +293,14 @@ fn install_elevated(app: &AppHandle) -> Result<(), InstallError> {
     {
         let (source, target) = prepare(app)?;
         let dir = target.parent().ok_or_else(|| InstallError::new("failed", tr("外掛路徑不正確")))?;
-        let temp = std::env::temp_dir();
-        let script = temp.join("soundcheck-install.cmd");
-        // The elevated script reports copy's own output and exit code here, since its
-        // console is hidden and Start-Process only tells us whether it was allowed to run.
-        let result_file = temp.join("soundcheck-install-result.txt");
-        let _ = std::fs::remove_file(&result_file);
-        let body = format!(
-            "@echo off\r\nif not exist \"{dir}\" mkdir \"{dir}\" > \"{res}\" 2>&1\r\ncopy /Y \"{src}\" \"{dst}\" >> \"{res}\" 2>&1\r\necho copy-exit=%errorlevel% >> \"{res}\"\r\n{legacy}",
-            dir = dir.display(),
-            src = source.display(),
-            dst = target.display(),
-            res = result_file.display(),
-            legacy = legacy_path()
-                .filter(|p| p.exists())
-                .map(|p| format!("rmdir /S /Q \"{}\" >> \"{}\" 2>&1\r\n", p.display(), result_file.display()))
-                .unwrap_or_default(),
-        );
-        log(app, format!("elevated: script {}:\n{body}", script.display()));
-        std::fs::write(&script, &body).map_err(|e| InstallError::new("failed", e.to_string()))?;
-
-        let ps_path = script.display().to_string().replace('\'', "''");
-        let output = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!("Start-Process -FilePath '{ps_path}' -Verb RunAs -Wait -WindowStyle Hidden"),
-            ])
-            .output()
-            .map_err(|e| InstallError::new("failed", e.to_string()))?;
-        log(
-            app,
-            format!(
-                "elevated: powershell exit={:?} stdout={:?} stderr={:?}",
-                output.status.code(),
-                String::from_utf8_lossy(&output.stdout).trim(),
-                String::from_utf8_lossy(&output.stderr).trim(),
-            ),
-        );
-        match std::fs::read(&result_file) {
-            // cmd writes in the console code page; lossy UTF-8 keeps the ASCII parts readable.
-            Ok(bytes) => log(app, format!("elevated: script output: {:?}", String::from_utf8_lossy(&bytes).trim())),
-            Err(e) => log(app, format!("elevated: no script output ({e}); the script may not have run")),
+        let mut commands = vec![
+            format!("if not exist \"{}\" mkdir \"{}\"", dir.display(), dir.display()),
+            format!("copy /Y \"{}\" \"{}\"", source.display(), target.display()),
+        ];
+        if let Some(legacy) = legacy_path().filter(|p| p.exists()) {
+            commands.push(format!("rmdir /S /Q \"{}\"", legacy.display()));
         }
-        let _ = std::fs::remove_file(&script);
-        let _ = std::fs::remove_file(&result_file);
-
-        // PowerShell fails Start-Process when the user answers "No" in the UAC prompt.
-        if !output.status.success() {
-            return Err(InstallError::new("cancelled", tr("已取消系統管理員權限的安裝。")));
-        }
+        run_elevated(app, "install", &commands, tr("已取消系統管理員權限的安裝。"))?;
         if !target.exists() {
             return Err(InstallError::new("failed", tr("安裝後找不到外掛檔案。")));
         }
@@ -353,6 +311,123 @@ fn install_elevated(app: &AppHandle) -> Result<(), InstallError> {
         let _ = app;
         Err(InstallError::new("failed", tr("只有 Windows 需要系統管理員權限安裝。")))
     }
+}
+
+/// Windows only: runs `commands` in a cmd script through UAC (Start-Process -Verb RunAs) and
+/// logs what the script printed. Fails with "cancelled" when the user declines the prompt.
+#[cfg(target_os = "windows")]
+fn run_elevated(app: &AppHandle, step: &str, commands: &[String], cancelled: String) -> Result<(), InstallError> {
+    let temp = std::env::temp_dir();
+    let script = temp.join(format!("soundcheck-{step}.cmd"));
+    // The elevated script reports each command's output and exit code here, since its console
+    // is hidden and Start-Process only tells us whether it was allowed to run.
+    let result_file = temp.join(format!("soundcheck-{step}-result.txt"));
+    let _ = std::fs::remove_file(&result_file);
+    let res = result_file.display();
+    let mut body = String::from("@echo off\r\n");
+    for command in commands {
+        body.push_str(&format!("{command} >> \"{res}\" 2>&1\r\necho exit=%errorlevel% >> \"{res}\"\r\n"));
+    }
+    log(app, format!("elevated {step}: script {}:\n{body}", script.display()));
+    std::fs::write(&script, &body).map_err(|e| InstallError::new("failed", e.to_string()))?;
+
+    let ps_path = script.display().to_string().replace('\'', "''");
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &format!("Start-Process -FilePath '{ps_path}' -Verb RunAs -Wait -WindowStyle Hidden")])
+        .output()
+        .map_err(|e| InstallError::new("failed", e.to_string()))?;
+    log(
+        app,
+        format!(
+            "elevated {step}: powershell exit={:?} stdout={:?} stderr={:?}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout).trim(),
+            String::from_utf8_lossy(&output.stderr).trim(),
+        ),
+    );
+    match std::fs::read(&result_file) {
+        // cmd writes in the console code page; lossy UTF-8 keeps the ASCII parts readable.
+        Ok(bytes) => log(app, format!("elevated {step}: script output: {:?}", String::from_utf8_lossy(&bytes).trim())),
+        Err(e) => log(app, format!("elevated {step}: no script output ({e}); the script may not have run")),
+    }
+    let _ = std::fs::remove_file(&script);
+    let _ = std::fs::remove_file(&result_file);
+
+    // PowerShell fails Start-Process when the user answers "No" in the UAC prompt.
+    if output.status.success() { Ok(()) } else { Err(InstallError::new("cancelled", cancelled)) }
+}
+
+/// The plugin's whole folder (Windows, Linux) or bundle (macOS), as uninstalling removes it.
+fn plugin_root() -> Option<PathBuf> {
+    let path = install_path()?;
+    #[cfg(target_os = "macos")]
+    {
+        Some(path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        // …\plugins\soundcheck\bin\64bit\soundcheck.dll → …\plugins\soundcheck
+        path.ancestors().nth(3).map(Path::to_path_buf)
+    }
+}
+
+/// What uninstalling removes: the plugin and the one from before the rename, if present.
+fn installed_roots() -> Vec<PathBuf> {
+    [plugin_root(), legacy_path()].into_iter().flatten().filter(|p| p.exists()).collect()
+}
+
+fn prepare_uninstall(app: &AppHandle) -> Result<Vec<PathBuf>, InstallError> {
+    let running = presence::scan().obs;
+    let roots = installed_roots();
+    log(app, format!("uninstall: obs_running={running} remove={roots:?}"));
+    if running {
+        return Err(InstallError::new("obsRunning", tr("直播軟體還開著。請先關閉它再移除。")));
+    }
+    Ok(roots)
+}
+
+/// Removes the plugin with the user's normal permissions. OBS must be closed.
+#[tauri::command]
+pub fn uninstall_plugin(app: AppHandle) -> Result<(), InstallError> {
+    logged(&app, "uninstall", || {
+        for root in prepare_uninstall(&app)? {
+            let removed = if root.is_dir() { std::fs::remove_dir_all(&root) } else { std::fs::remove_file(&root) };
+            match removed {
+                Ok(()) => log(&app, format!("uninstall: removed {}", root.display())),
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    log(&app, format!("uninstall: {}: {e}", root.display()));
+                    return Err(InstallError::new(
+                        "permissionDenied",
+                        tr("沒有權限移除外掛。這通常是因為之前用系統管理員權限安裝過外掛。"),
+                    ));
+                }
+                Err(e) => return Err(InstallError::new("failed", trf("移除外掛失敗：{e}", &[("e", &e)]))),
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Windows only: removes the plugin folders through an elevated cmd script (UAC prompt).
+#[tauri::command]
+pub fn uninstall_plugin_elevated(app: AppHandle) -> Result<(), InstallError> {
+    logged(&app, "uninstall-elevated", || {
+        #[cfg(target_os = "windows")]
+        {
+            let roots = prepare_uninstall(&app)?;
+            let commands: Vec<String> = roots.iter().map(|r| format!("rmdir /S /Q \"{}\"", r.display())).collect();
+            run_elevated(&app, "uninstall", &commands, tr("已取消系統管理員權限的移除。"))?;
+            if installed_roots().is_empty() {
+                Ok(())
+            } else {
+                Err(InstallError::new("failed", tr("移除後外掛資料夾還在。")))
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err(InstallError::new("failed", tr("只有 Windows 需要系統管理員權限安裝。")))
+        }
+    })
 }
 
 /// Starts OBS the way its own shortcut does.

@@ -7,7 +7,7 @@ import { StatusBadge } from "./StatusBadge";
 import { msg, t } from "../i18n";
 
 const MONITOR_OPTIONS: { value: MonitorType; label: string; explain: string }[] = [
-  { value: "off", label: msg("關閉"), explain: msg("你的耳機聽不到這個聲音；有送到直播音軌的話，觀眾聽得到。") },
+  { value: "off", label: msg("不監聽"), explain: msg("你的耳機聽不到這個聲音；有送到直播音軌的話，觀眾聽得到。") },
   { value: "monitorOnly", label: msg("僅監聽"), explain: msg("只有你的耳機聽得到，觀眾聽不到。") },
   { value: "monitorAndOutput", label: msg("監聽輸出"), explain: msg("你的耳機和觀眾都聽得到。") },
 ];
@@ -53,8 +53,8 @@ export function ChannelStrip(props: Props) {
   return (
     <div id={props.id} className={`strip${heard ? "" : " dimmed"}${props.flash ? " flash" : ""}`}>
       <div className="strip-head">
-        <div>
-          <h3>{source.name}</h3>
+        <div className="strip-title">
+          <h3 title={source.name}>{source.name}</h3>
           <div className="dev">{t(source.device)}</div>
         </div>
         {source.global ? (
@@ -69,6 +69,7 @@ export function ChannelStrip(props: Props) {
           />
         )}
       </div>
+      <div className="strip-status">
       <StatusBadge kind={heard && !sounding ? "silent" : status} />
 
       {status === "hidden" && (
@@ -96,6 +97,7 @@ export function ChannelStrip(props: Props) {
         </div>
       )}
       {heard && !sounding && <div className="hint">{t("觀眾聽得到，但現在沒有聲音進來。")}</div>}
+      </div>
 
       <div className="fader">
         <div className="scale">
@@ -140,6 +142,7 @@ export function ChannelStrip(props: Props) {
         <Icon name={source.muted ? "volume-x" : "volume-2"} />
       </button>
 
+      <div className="strip-monitor">
       {props.caps.monitoringControl ? (
         <div className="seg" role="group" aria-label={t("監聽模式")}>
           {MONITOR_OPTIONS.map((opt) => (
@@ -161,7 +164,9 @@ export function ChannelStrip(props: Props) {
       )}
 
       <div className="hint">{t(MONITOR_OPTIONS.find((o) => o.value === source.monitorType)?.explain ?? "")}</div>
+      </div>
 
+      <div className="strip-more">
       {(props.caps.balance || props.caps.syncOffset) && (
         <IconButton
           icon="sliders-horizontal"
@@ -205,8 +210,10 @@ export function ChannelStrip(props: Props) {
         </div>
       )}
 
+      </div>
+
       {props.caps.filters && (
-      <>
+      <div className="strip-filters">
       <div className="cap">{t("濾鏡鏈")}</div>
       <div className="chain">
         {source.filters.map((f) => (
@@ -226,7 +233,7 @@ export function ChannelStrip(props: Props) {
           {source.filters.length === 0 ? t("加濾鏡") : t("調整濾鏡")}
         </button>
       </div>
-      </>
+      </div>
       )}
     </div>
   );

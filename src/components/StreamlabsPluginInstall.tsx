@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { assessPlugin, usePluginFiles } from "../plugin";
 import { IconButton } from "./Icon";
+import { PluginUninstall } from "./PluginUninstall";
 import { t } from "../i18n";
 import { Step, type StepState } from "./PluginInstall";
 
@@ -27,10 +28,11 @@ interface Props {
 export function StreamlabsPluginInstall({ loadedVersion, onClose }: Props) {
   const status = usePluginFiles("streamlabs", 1000);
   const [install, setInstall] = useState<InstallState>({ kind: "idle" });
+  const [removed, setRemoved] = useState(false);
   if (!status) return null;
 
   const bundled = status.bundledVersion;
-  const { fileCurrent, loadedCurrent } = assessPlugin(status, loadedVersion, true);
+  const { fileCurrent, loadedCurrent, need } = assessPlugin(status, loadedVersion, true);
   const installed = install.kind === "done" || fileCurrent;
   // An older version is loaded (or the file is locked anyway): Streamlabs has to close first.
   const mustClose = (Boolean(loadedVersion) && !loadedCurrent) || (install.kind === "error" && install.error.kind === "streamlabsRunning");
@@ -50,7 +52,7 @@ export function StreamlabsPluginInstall({ loadedVersion, onClose }: Props) {
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="plugin-title">
       <div className="dialog">
         <div className="dialog-head">
-          <h2 id="plugin-title">{status.installed ? t("更新直播軟體外掛") : t("安裝直播軟體外掛")}</h2>
+          <h2 id="plugin-title">{!status.installed ? t("安裝直播軟體外掛") : need === "update" ? t("更新直播軟體外掛") : t("直播軟體外掛")}</h2>
           <IconButton icon="x" label={t("關閉")} className="close" onClick={onClose} />
         </div>
         <p className="dialog-lead">{t("試音需要在直播軟體裡裝一個小外掛。它只會讀取直播的聲音，不會改變你的場景或設定。")}</p>
@@ -108,6 +110,15 @@ export function StreamlabsPluginInstall({ loadedVersion, onClose }: Props) {
               </ol>
             )}
           </>
+        )}
+
+        {(status.installed || removed) && (
+          <PluginUninstall
+            software="streamlabs"
+            // Streamlabs keeps a loaded plugin's file locked until it closes.
+            blocked={loadedVersion && status.running ? t("請先關閉直播軟體再移除。") : null}
+            onRemoved={() => setRemoved(true)}
+          />
         )}
       </div>
     </div>
