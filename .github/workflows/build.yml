@@ -162,6 +162,8 @@ jobs:
           releaseBody: |
             Windows: run the `-setup.exe` (or `.msi`) installer. Or, without installing, unzip `x64-portable.zip` and run `SoundCheck.exe`; keep the `obs-plugin` folder next to it. The app isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose "More info" → "Run anyway".
             macOS: open the `.dmg` and drag SoundCheck to Applications. The app isn't notarized, so the first time, right-click it and choose "Open".
+
+            License: the app is MIT; the bundled plugin (soundcheck.dll, soundcheck-streamlabs.dll, soundcheck.plugin) is GPL-2.0-or-later, with its source in [obs-plugin/](https://github.com/${{ github.repository }}/tree/v${{ needs.version.outputs.version }}/obs-plugin). The installers include the license texts.
           releaseDraft: true
           prerelease: false
 
