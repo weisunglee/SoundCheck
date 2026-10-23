@@ -2,6 +2,7 @@
 // The filters themselves are reached through the adapter's FilterOps (src/adapter.ts).
 import type { FilterOps } from "./adapter";
 import { msg, t } from "./i18n";
+import { uniqueName } from "./names";
 
 export interface FilterInfo {
   kind: string;
@@ -110,11 +111,6 @@ export const PROBLEMS: Problem[] = [
   },
 ];
 
-function uniqueName(base: string, taken: Set<string>): string {
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
-}
-
 /**
  * Adds a filter of `kind` with the wizard's starting settings and moves it to its place in the
  * recommended chain order. Filters the wizard does not know keep their position.
@@ -123,7 +119,7 @@ export async function addFilter(ops: FilterOps, sourceName: string, kind: string
   const info = FILTERS[kind];
   const existing = await ops.list(sourceName);
   // The filter is named in the UI language, since that is the name the user then sees in the software.
-  const filterName = uniqueName(t(info.label), new Set(existing.map((f) => f.name)));
+  const filterName = uniqueName(t(info.label), existing.map((f) => f.name));
   await ops.create(sourceName, filterName, kind, info.initial);
 
   // Insert before the first known filter that should run after this one.

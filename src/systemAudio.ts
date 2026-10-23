@@ -1,7 +1,8 @@
-// Sound playing on this computer, and whether OBS already captures it.
+// Sound playing on this computer, and whether the streaming software already captures it.
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
-import type { CaptureSettings } from "./adapter";
+import { useEffect, useRef, useState } from "react";
+import type { CaptureSettings, SoftwareAdapter } from "./adapter";
+import type { AudioSource } from "./types";
 
 export interface SystemDevice {
   id: string;
@@ -31,6 +32,35 @@ export interface SystemAudio {
 export const SOUNDING_PEAK = 0.003;
 
 /** Polls what is playing on the computer while `enabled`. */
+/** How often capture settings are read again while the source list stays the same (a device changed in the software). */
+const CAPTURE_REFRESH_MS = 5000;
+
+/**
+ * The settings of the capture sources among `sources`. Read again when a source is added,
+ * removed or renamed, and every few seconds; not on every volume or mute change.
+ */
+export function useCaptureSettings(adapter: SoftwareAdapter, sources: AudioSource[]): CaptureSettings {
+  const [captures, setCaptures] = useState<CaptureSettings>(new Map());
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+  const structure = sources.map((s) => `${s.name}\n${s.inputKind}`).join("\n");
+  useEffect(() => {
+    let alive = true;
+    const read = () =>
+      adapter
+        .captureSettings(sourcesRef.current)
+        .then((c) => alive && setCaptures(c))
+        .catch(() => {});
+    read();
+    const id = setInterval(read, CAPTURE_REFRESH_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [adapter, structure]);
+  return captures;
+}
+
 export function useSystemAudio(enabled: boolean, intervalMs = 1000): SystemAudio | null {
   const [snapshot, setSnapshot] = useState<SystemAudio | null>(null);
   useEffect(() => {

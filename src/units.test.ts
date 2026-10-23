@@ -1,7 +1,9 @@
-// Small pure helpers: version comparison, the IEC fader curve, loudness verdicts, and how
-// system audio maps onto captures in the streaming software.
+// Small pure helpers: version comparison, the IEC fader curve, levels, names, loudness
+// verdicts, and how system audio maps onto captures in the streaming software.
 import { describe, expect, it } from "vitest";
+import { meterPosition, toDb } from "./levels";
 import { loudnessVerdict } from "./loudnessVerdict";
+import { uniqueName } from "./names";
 import { type PluginFiles, assessPlugin, compareVersions, pluginApplies } from "./plugin";
 import { iecDbToDeflection } from "./streamlabs";
 import { type SystemApp, type SystemDevice, appCoverage, deviceCoverage, obsWindowString } from "./systemAudio";
@@ -70,6 +72,29 @@ describe("iecDbToDeflection", () => {
       expect(d).toBeGreaterThanOrEqual(previous);
       previous = d;
     }
+  });
+});
+
+describe("levels", () => {
+  it("converts amplitude to dBFS, with null for silence", () => {
+    expect(toDb(1)).toBe(0);
+    expect(toDb(0.1)).toBeCloseTo(-20, 9);
+    expect(toDb(0)).toBeNull();
+  });
+  it("places -60..0 dB on the meter and clamps outside it", () => {
+    expect(meterPosition(1)).toBe(1);
+    expect(meterPosition(0.1)).toBeCloseTo(2 / 3, 9);
+    expect(meterPosition(0.0001)).toBe(0);
+    expect(meterPosition(0)).toBe(0);
+    expect(meterPosition(2)).toBe(1);
+  });
+});
+
+describe("uniqueName", () => {
+  it("numbers copies the way the streaming software does", () => {
+    expect(uniqueName("Mic", [])).toBe("Mic");
+    expect(uniqueName("Mic", ["Mic"])).toBe("Mic 2");
+    expect(uniqueName("Mic", ["Mic", "Mic 2"])).toBe("Mic 3");
   });
 });
 

@@ -136,9 +136,3 @@ export const INPUT_KIND_LABELS: Record<string, string> = {
   screen_capture: msg("螢幕擷取"),
   ndi_source: msg("NDI 來源"),
 };
-
-/** Maps a 0..1 amplitude to a 0..1 meter position on the -60..0 dB scale. */
-export function meterPosition(amplitude: number): number {
-  if (amplitude <= 0) return 0;
-  return Math.min(1, Math.max(0, (20 * Math.log10(amplitude) + 60) / 60));
-}

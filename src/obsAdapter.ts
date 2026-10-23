@@ -1,7 +1,8 @@
 // OBS Studio behind the SoftwareAdapter interface, over obs-websocket v5. OBS can do everything
 // the interface offers, and reports every change as an event.
 import type { RequestBatchRequest } from "obs-websocket-js";
-import { type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter, meterPosition } from "./adapter";
+import { type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
+import { meterPosition, toDb } from "./levels";
 import { obs } from "./obsClient";
 import { plugin } from "./plugin";
 import { CAPTURE_KIND_SET } from "./systemAudio";
@@ -243,8 +244,8 @@ export const obsAdapter: SoftwareAdapter = {
             const [l, r] = input.inputLevelsMul;
             const left = meterPosition(l?.[1] ?? 0);
             levels[input.inputName] = [left, r ? meterPosition(r[1]) : left];
-            const rawPeak = Math.max(0, ...input.inputLevelsMul.map((ch) => ch[2] ?? 0));
-            if (rawPeak > 0) inputDb[input.inputName] = 20 * Math.log10(rawPeak);
+            const rawPeak = toDb(Math.max(0, ...input.inputLevelsMul.map((ch) => ch[2] ?? 0)));
+            if (rawPeak !== null) inputDb[input.inputName] = rawPeak;
           }
           changes.levels(levels, inputDb);
         },

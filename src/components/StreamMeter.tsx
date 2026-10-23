@@ -1,5 +1,6 @@
 import { useRef } from "react";
-import { loudnessVerdict, toDb } from "../loudnessVerdict";
+import { toDb } from "../levels";
+import { loudnessVerdict } from "../loudnessVerdict";
 import type { StreamLevel } from "../streamTap";
 import type { AudioSource } from "../types";
 import { t } from "../i18n";

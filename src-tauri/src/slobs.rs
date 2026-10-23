@@ -40,16 +40,9 @@ pub fn socket_path() -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
-const PROCESS_NAMES: [&str; 2] = ["Streamlabs OBS.exe", "Streamlabs Desktop.exe"];
+pub const PROCESS_NAMES: [&str; 2] = ["Streamlabs OBS.exe", "Streamlabs Desktop.exe"];
 #[cfg(not(target_os = "windows"))]
-const PROCESS_NAMES: [&str; 2] = ["Streamlabs OBS", "Streamlabs Desktop"];
-
-pub fn running() -> bool {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
-    let mut system = System::new();
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
-    PROCESS_NAMES.iter().any(|name| system.processes_by_exact_name(name.as_ref()).next().is_some())
-}
+pub const PROCESS_NAMES: [&str; 2] = ["Streamlabs OBS", "Streamlabs Desktop"];
 
 /// Whether Streamlabs Desktop's local API is accepting connections right now.
 pub fn available() -> bool {

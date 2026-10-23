@@ -2,14 +2,12 @@
 // modules. It works only on a temporary scene and source that it creates and removes again, and
 // refuses to run while OBS is streaming or recording.
 //   npx tsx tools/verify-features.ts
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { FILTERS, addFilter } from "../src/filters";
 import { t } from "../src/i18n";
 import { obsAdapter } from "../src/obsAdapter";
 import { obs } from "../src/obsClient";
 import { applyProfile, captureProfile } from "../src/profiles";
+import { connectLocalObs } from "./connect-obs";
 
 const filters = obsAdapter.filters!;
 
@@ -17,12 +15,7 @@ const SCENE = "SoundCheck 測試場景";
 const INPUT = "SoundCheck 測試來源";
 const APP_INPUT = "SoundCheck 測試應用程式";
 
-const configPath =
-  process.platform === "win32"
-    ? join(process.env.APPDATA!, "obs-studio/plugin_config/obs-websocket/config.json")
-    : join(homedir(), "Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json");
-const config = JSON.parse(readFileSync(configPath, "utf8"));
-await obs.connect(`ws://127.0.0.1:${config.server_port}`, config.auth_required ? config.server_password : undefined);
+await connectLocalObs();
 
 let failures = 0;
 const check = (ok: boolean, label: string, detail = "") => {

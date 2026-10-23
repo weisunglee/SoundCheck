@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import {
   SOUNDING_PEAK,
   appCoverage,
   appLabel,
   deviceCoverage,
+  useCaptureSettings,
   useSystemAudio,
 } from "../systemAudio";
-import type { CaptureSettings, SoftwareAdapter } from "../adapter";
+import type { SoftwareAdapter } from "../adapter";
 import type { AudioSource } from "../types";
 import type { AddSourceStart } from "./AddSourceWizard";
 import { t } from "../i18n";
@@ -20,15 +21,11 @@ interface Props {
 /** Keep an item listed this long after it goes quiet, so it doesn't flicker between words. */
 const HOLD_MS = 4000;
 
-/** Apps and playback devices making sound right now, and whether OBS captures them. */
+/** Apps and playback devices making sound right now, and whether the streaming software captures them. */
 export function SystemSounds({ adapter, sources, onAdd }: Props) {
   const system = useSystemAudio(true, 1000);
-  const [captures, setCaptures] = useState<CaptureSettings>(new Map());
+  const captures = useCaptureSettings(adapter, sources);
   const lastHeard = useRef(new Map<string, number>());
-
-  useEffect(() => {
-    adapter.captureSettings(sources).then(setCaptures);
-  }, [adapter, sources]);
 
   if (!system?.supported) return null;
 

@@ -26,5 +26,3 @@ export function loudnessVerdict(lufs: number | null, peakDbfs: number | null, cl
   }
   return { tone: "ok", text: t("音量適中（{lufs} LUFS）。", { lufs: lufs.toFixed(0) }) };
 }
-
-export const toDb = (amplitude: number) => (amplitude > 0 ? 20 * Math.log10(amplitude) : null);

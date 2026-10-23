@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 use tauri::path::BaseDirectory;
 
 use crate::i18n::{tr, trf};
+use crate::presence;
 use tauri::{AppHandle, Manager};
 
 pub const BUNDLED_VERSION: &str = env!("SOUNDCHECK_PLUGIN_VERSION");
@@ -26,11 +26,11 @@ const RESOURCE: &str = "obs-plugin/soundcheck.plugin";
 const RESOURCE: &str = "obs-plugin/soundcheck.so";
 
 #[cfg(target_os = "windows")]
-const OBS_PROCESS: &str = "obs64.exe";
+pub const OBS_PROCESS: &str = "obs64.exe";
 #[cfg(target_os = "macos")]
-const OBS_PROCESS: &str = "OBS";
+pub const OBS_PROCESS: &str = "OBS";
 #[cfg(target_os = "linux")]
-const OBS_PROCESS: &str = "obs";
+pub const OBS_PROCESS: &str = "obs";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,12 +145,6 @@ fn file_version(path: &Path) -> Option<String> {
     }
 }
 
-pub fn obs_running() -> bool {
-    let mut system = System::new();
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
-    system.processes_by_exact_name(OBS_PROCESS.as_ref()).next().is_some()
-}
-
 /// OBS 32+ keeps `plugin_manager/modules.json`: `[{ "module_name": …, "enabled": … }, …]`.
 fn enabled_in_plugin_manager() -> Option<bool> {
     let text = std::fs::read_to_string(obs_config_dir()?.join("plugin_manager/modules.json")).ok()?;
@@ -169,7 +163,8 @@ pub fn plugin_status(app: AppHandle) -> PluginStatus {
         bundled_version: bundled_path(&app).map(|_| BUNDLED_VERSION.to_string()),
         installed,
         installed_version: if installed { path.as_deref().and_then(file_version) } else { None },
-        obs_running: obs_running(),
+        // Polled every few seconds; the presence watcher's last scan is fresh enough.
+        obs_running: presence::obs_seen_running(),
         enabled_in_plugin_manager: enabled_in_plugin_manager(),
         legacy_installed: legacy_path().is_some_and(|p| p.exists()),
     }
@@ -209,7 +204,8 @@ fn check_installed(app: &AppHandle, target: &Path) -> Result<(), InstallError> {
 }
 
 fn prepare(app: &AppHandle) -> Result<(PathBuf, PathBuf), InstallError> {
-    let running = obs_running();
+    // Installing over a running OBS fails, so look right now rather than at the last scan.
+    let running = presence::scan().obs;
     let source = bundled_path(app);
     let target = install_path();
     log(app, format!("prepare: obs_running={running} source={source:?} target={target:?}"));

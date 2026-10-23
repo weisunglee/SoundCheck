@@ -9,8 +9,11 @@ import {
   appLabel,
   deviceCoverage,
   obsWindowString,
+  useCaptureSettings,
   useSystemAudio,
 } from "../systemAudio";
+import { meterPosition } from "../levels";
+import { uniqueName } from "../names";
 import type { AudioSource } from "../types";
 import { msg, t } from "../i18n";
 
@@ -55,7 +58,7 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
   const [name, setName] = useState("");
   const [allScenes, setAllScenes] = useState(false);
   const [availableKinds, setAvailableKinds] = useState<Set<string> | null>(null);
-  const [captures, setCaptures] = useState<CaptureSettings>(new Map());
+  const captures = useCaptureSettings(adapter, sources);
   const [status, setStatus] = useState<{ kind: "idle" } | { kind: "adding" } | { kind: "done"; name: string } | { kind: "error"; message: string }>({
     kind: "idle",
   });
@@ -94,16 +97,13 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
       .then(setAvailableKinds)
       .catch(() => setAvailableKinds(new Set()));
   }, []);
-  useEffect(() => {
-    adapter.captureSettings(sources).then(setCaptures);
-  }, [sources]);
 
   const obsKind = (k: SoundKind) => CAPTURE_KINDS[k].find((x) => availableKinds?.has(x)) ?? null;
   const devices = system?.devices ?? [];
 
   const choose = (p: Pick) => {
     setPick(p);
-    setName(uniqueName(p.name, sources));
+    setName(uniqueName(p.name, sources.map((s) => s.name)));
   };
 
   // Jump straight to the confirm step once when the wizard was opened for a specific device or app;
@@ -268,17 +268,10 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
   );
 }
 
-function uniqueName(base: string, sources: AudioSource[]): string {
-  const taken = new Set(sources.map((s) => s.name));
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
-}
-
 function Peak({ value }: { value: number }) {
-  const db = value > 0 ? 20 * Math.log10(value) : -60;
   return (
     <span className="mini-meter" aria-hidden="true">
-      <b style={{ width: `${Math.max(0, Math.min(1, (db + 60) / 60)) * 100}%` }} />
+      <b style={{ width: `${meterPosition(value) * 100}%` }} />
     </span>
   );
 }
