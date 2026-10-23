@@ -16,6 +16,10 @@
   --on-hot: #fff;
   --hot-fg: #ffd9d6;
   --shadow: rgb(0 0 0 / 0.45);
+  /* Level meter gradient; the light theme brightens it, since its text colours are dark. */
+  --meter-ok: var(--ok);
+  --meter-warn: var(--warn);
+  --meter-hot: var(--hot);
   --font-body: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
@@ -43,6 +47,9 @@
   --on-hot: #ffffff;
   --hot-fg: #9b1d14;
   --shadow: rgb(20 30 50 / 0.18);
+  --meter-ok: #2fb86a;
+  --meter-warn: #f0b429;
+  --meter-hot: #e5483d;
   color-scheme: light;
 }
 
@@ -63,6 +70,9 @@
     --on-hot: #ffffff;
     --hot-fg: #9b1d14;
     --shadow: rgb(20 30 50 / 0.18);
+    --meter-ok: #2fb86a;
+    --meter-warn: #f0b429;
+    --meter-hot: #e5483d;
     color-scheme: light;
   }
 }
@@ -385,14 +395,16 @@ input {
   overflow: hidden;
 }
 
+/*
+ * Meter fills span the whole track and are clipped to the level (meterFill in LevelMeter.tsx),
+ * so the gradient follows the -60..0 dB scale whatever the track's size.
+ */
 .meter b {
   position: absolute;
-  inset: auto 0 0 0;
+  inset: 0;
   border-radius: 4px;
-  background: linear-gradient(to top, var(--ok) 0 62%, var(--warn) 78%, var(--hot) 96%);
-  background-size: 100% 190px;
-  background-position: bottom;
-  transition: height 60ms linear;
+  background: linear-gradient(to top, var(--meter-ok) 0 62%, var(--meter-warn) 78%, var(--meter-hot) 96%);
+  transition: clip-path 60ms linear;
 }
 
 .meter s {
@@ -1127,11 +1139,10 @@ body,
 }
 
 .hmeter b {
-  display: block;
-  height: 100%;
-  background: linear-gradient(to right, var(--ok) 0 62%, var(--warn) 78%, var(--hot) 96%);
-  background-size: 420px 100%;
-  transition: width 60ms linear;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, var(--meter-ok) 0 62%, var(--meter-warn) 78%, var(--meter-hot) 96%);
+  transition: clip-path 60ms linear;
 }
 
 .progress {
@@ -1417,10 +1428,10 @@ body,
 
 .level-bar > b {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0;
   border-radius: 4px;
-  background: linear-gradient(to right, var(--ok) 0 62%, var(--warn) 78%, var(--hot) 96%);
-  transition: width 60ms linear;
+  background: linear-gradient(to right, var(--meter-ok) 0 62%, var(--meter-warn) 78%, var(--meter-hot) 96%);
+  transition: clip-path 60ms linear;
 }
 
 .marker {

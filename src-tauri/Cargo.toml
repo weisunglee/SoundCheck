@@ -1,6 +1,6 @@
 [package]
 name = "soundcheck"
-version = "0.2.0"
+version = "0.3.0"
 description = "SoundCheck: audio setup and sound check for live streaming"
 authors = ["Vincent Lee"]
 license = "MIT"

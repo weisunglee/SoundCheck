@@ -3,6 +3,7 @@ import type { FilterOps, SourceFilter } from "../adapter";
 import { FILTERS, PROBLEMS, addFilter } from "../filters";
 import { t } from "../i18n";
 import { Icon, IconButton } from "./Icon";
+import { meterFill } from "./LevelMeter";
 
 type Settings = Record<string, string | number | boolean>;
 
@@ -238,7 +239,7 @@ const pct = (db: number) => `${Math.max(0, Math.min(1, (db - BAR_MIN_DB) / -BAR_
 function LevelBar({ inputDb, markers }: { inputDb: number | null; markers: { db: number; label: string; tone: string }[] }) {
   return (
     <div className="level-bar" aria-hidden="true">
-      <b style={{ width: inputDb === null ? 0 : pct(inputDb) }} />
+      <b style={meterFill(inputDb === null ? 0 : (inputDb + 60) / 60, "horizontal")} />
       {markers.map((m) => (
         <span key={m.label} className={`marker marker-${m.tone}`} style={{ left: pct(m.db) }}>
           <em>{m.label}</em>

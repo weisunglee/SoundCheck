@@ -5,6 +5,7 @@ import type { StreamLevel } from "../streamTap";
 import type { AudioSource } from "../types";
 import { t } from "../i18n";
 import { Icon } from "./Icon";
+import { meterFill } from "./LevelMeter";
 
 interface Props {
   level: StreamLevel | null;
@@ -66,7 +67,7 @@ export function StreamMeter({ level, running, pluginLoaded, streamPaused, source
           <div className="hmeters">
             {peaks.map((db, ch) => (
               <div key={ch} className="hmeter">
-                <b style={{ width: `${pos(db) * 100}%` }} />
+                <b style={meterFill(pos(db), "horizontal")} />
                 <s style={{ left: `${pos(held.current[ch].db) * 100}%` }} />
               </div>
             ))}
