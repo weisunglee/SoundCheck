@@ -238,3 +238,9 @@ push 讓 `src-tauri/tauri.conf.json` 的版號變成一個還沒有 tag 的版�
 一般文字用「直播軟體」稱呼，只有需要點特定選單的步驟才用 `{app}` 帶出軟體名稱（`src/i18n.tsx` 的 `setSoftwareName`）。後端（Rust）產生的訊息在 `src-tauri/src/i18n.rs`，介面切換語言時會一起切換。
 
 App 啟動後會自動讀取本機 OBS 的 WebSocket 設定並連線。`npx tsx tools/inspect-obs.ts` 可以在有 OBS 的電腦上印出 App 會看到的資料和各場景的來源狀態。
+
+## 授權
+
+- App 和 `obs-plugin/` 以外的所有內容採用 [MIT 授權](LICENSE)。
+- `obs-plugin/` 裡的外掛採用 [GNU GPL v2.0 或更新版本](obs-plugin/LICENSE)，因為它連結了 OBS 的 libobs，也用了 obs-websocket 的 API 標頭檔，兩者都是 GPL-2.0-or-later。App 是透過本機連線跟外掛溝通，沒有連結外掛，所以 App 維持 MIT；安裝檔裡的外掛旁邊附有外掛的授權條文。
+- 圖示來自 [Lucide](https://lucide.dev)（ISC 授權，見 `third_party/lucide-LICENSE.txt`）。

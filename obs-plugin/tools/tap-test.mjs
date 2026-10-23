@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 weisunglee
+
 // Validation for the SoundCheck plugin, run on the machine where OBS runs:
 //   node tap-test.mjs [seconds] [track]
 // Connects with the local obs-websocket settings, asks the plugin which tracks go

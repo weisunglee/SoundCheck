@@ -1,7 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "../obs-plugin/build_macos/RelWithDebInfo/soundcheck.plugin": "obs-plugin/soundcheck.plugin"
+      "../obs-plugin/build_macos/RelWithDebInfo/soundcheck.plugin": "obs-plugin/soundcheck.plugin",
+      "../obs-plugin/LICENSE": "obs-plugin/LICENSE.txt"
     }
   }
 }

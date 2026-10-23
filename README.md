@@ -149,6 +149,8 @@ A push that changes the version in `src-tauri/tauri.conf.json` to one without a 
 
 UI text is written in Traditional Chinese inside `t("…")`; the other languages are in `src/locales/`, keyed by the Chinese text (the gettext approach). After adding or changing text, run `npm run check:i18n`: it lists missing and unused translations and mismatched `{placeholders}`. Text stored as data and shown later is marked with `msg("…")` and translated when shown. UI text says "streaming software" in general and names the program (`{app}`) only in steps that point at its menus. Messages from the Rust side are in `src-tauri/src/i18n.rs`.
 
-## License notes
+## License
 
-Icons are from [Lucide](https://lucide.dev) (ISC license, see `third_party/lucide-LICENSE.txt`).
+- The app and everything outside `obs-plugin/` is under the [MIT License](LICENSE).
+- The plugin in `obs-plugin/` is under the [GNU General Public License v2.0 or later](obs-plugin/LICENSE), because it links against OBS's libobs and uses obs-websocket's API header, which are GPL-2.0-or-later. The app talks to the plugin over a local connection and doesn't link it, so the app's license stays MIT; the installers carry the plugin's license next to the plugin files.
+- Icons are from [Lucide](https://lucide.dev) (ISC license, see `third_party/lucide-LICENSE.txt`).

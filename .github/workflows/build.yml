@@ -176,6 +176,11 @@ jobs:
           New-Item -ItemType Directory -Force "$dir/obs-plugin" | Out-Null
           Copy-Item src-tauri/target/release/SoundCheck.exe $dir
           Copy-Item obs-plugin/build_x64/RelWithDebInfo/soundcheck.dll, obs-plugin/build_x64_streamlabs/RelWithDebInfo/soundcheck-streamlabs.dll "$dir/obs-plugin"
+          # The same license texts the installers carry: the app's (MIT), the plugin's (GPL), the icons' (ISC).
+          New-Item -ItemType Directory -Force "$dir/third_party" | Out-Null
+          Copy-Item LICENSE "$dir/LICENSE.txt"
+          Copy-Item obs-plugin/LICENSE "$dir/obs-plugin/LICENSE.txt"
+          Copy-Item third_party/lucide-LICENSE.txt "$dir/third_party"
           # Windows' tar writes zip paths with "/", which every unzip tool reads.
           tar -a -c -f "portable/$name" -C portable SoundCheck
           Get-ChildItem portable -Recurse -File | ForEach-Object { "$($_.FullName)  $($_.Length)" }

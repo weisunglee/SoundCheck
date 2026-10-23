@@ -25,6 +25,10 @@
   },
   "bundle": {
     "active": true,
+    "resources": {
+      "../LICENSE": "LICENSE.txt",
+      "../third_party/lucide-LICENSE.txt": "third_party/lucide-LICENSE.txt"
+    },
     "targets": "all",
     "icon": [
       "icons/32x32.png",

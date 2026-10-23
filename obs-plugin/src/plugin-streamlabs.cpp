@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 weisunglee
+
 // The plugin as loaded by Streamlabs Desktop (its user plugin folder, loaded on request through
 // ObsUserPluginsService.initializeModule). Streamlabs has neither obs-websocket nor OBS's
 // frontend API, so the app reaches the plugin through a control port of its own:

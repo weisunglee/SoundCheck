@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 weisunglee
+
 // Checks the plugin's stream-audio pause and its heartbeat watchdog:
 //   node pause-test.mjs
 // The stream tracks go silent for about 8 seconds in total, so it refuses to

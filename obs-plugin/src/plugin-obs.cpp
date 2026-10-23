@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 weisunglee
+
 // The plugin as loaded by OBS Studio: the app reaches it through obs-websocket vendor requests,
 // and OBS's frontend API says which tracks go to the stream.
 #include <obs-frontend-api.h>
