@@ -7,7 +7,7 @@ import { EventSubscription, OBSWebSocketError } from "obs-websocket-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setSoftwareName, t } from "./i18n";
 import { obs } from "./obsClient";
-import { SOFTWARE_NAMES, type SoftwareId, loadSoftwareChoice } from "./software";
+import { SOFTWARE_NAMES, type SoftwareChoice, type SoftwareId, loadSoftwareChoice } from "./software";
 import { streamlabs } from "./streamlabs";
 
 interface WebsocketConfig {
@@ -97,7 +97,7 @@ async function connectToObs(manual: ManualSettings | null): Promise<string> {
   } else {
     const config = await invoke<WebsocketConfig | null>("read_obs_websocket_config");
     if (!config) throw new ConnectError("noConfig", t("找不到這台電腦上的直播軟體設定。"));
-    if (!config.enabled) throw new ConnectError("disabled", t("{app} 的 WebSocket 伺服器沒有開啟。"));
+    if (!config.enabled) throw new ConnectError("disabled", t("{app} 的 WebSocket 伺服器沒有開啟。", { app: SOFTWARE_NAMES.obs }));
     port = config.port;
     password = config.password ?? undefined;
   }
@@ -135,6 +135,16 @@ async function connectToStreamlabs(presence: SoftwarePresence): Promise<void> {
   }
 }
 
+/**
+ * Which software to try, in order. In auto mode Streamlabs is only tried when it is actually
+ * running, so a user with neither open is guided towards OBS, the fully supported one.
+ */
+export function connectionOrder(choice: SoftwareChoice, seen: SoftwarePresence): SoftwareId[] {
+  if (choice !== "auto") return [choice];
+  if (!seen.streamlabs.ready) return ["obs"];
+  return seen.obs.running ? ["obs", "streamlabs"] : ["streamlabs"];
+}
+
 /** Drops any current connection and connects again right away with the latest settings. */
 export function retryConnection() {
   window.dispatchEvent(new Event(RETRY_EVENT));
@@ -166,26 +176,23 @@ export function useConnection(): { state: ConnectionState; presence: SoftwarePre
     }
     inFlight.current = true;
     if (stateRef.current.kind !== "failed") setState({ kind: "connecting" });
-    const choice = loadSoftwareChoice();
-    const seen = presenceRef.current;
+    const order = connectionOrder(loadSoftwareChoice(), presenceRef.current);
     const manual = loadManualSettings();
-    // In auto mode Streamlabs is only tried when it is actually running, so a user with neither
-    // open is guided towards OBS, the fully supported one.
-    const order: SoftwareId[] =
-      choice !== "auto" ? [choice] : seen.streamlabs.ready && !seen.obs.running ? ["streamlabs"] : seen.streamlabs.ready ? ["obs", "streamlabs"] : ["obs"];
 
     (async () => {
       let firstError: { software: SoftwareId; error: Error } | null = null;
       for (const software of order) {
         try {
-          setSoftwareName(SOFTWARE_NAMES[software]);
+          let connected: ConnectionState;
           if (software === "obs") {
-            const version = await connectToObs(manual);
-            setState({ kind: "connected", software, version, local: isLoopback(manual?.host) });
+            connected = { kind: "connected", software, version: await connectToObs(manual), local: isLoopback(manual?.host) };
           } else {
             await connectToStreamlabs(presenceRef.current);
-            setState({ kind: "connected", software, version: "", local: true });
+            connected = { kind: "connected", software, version: "", local: true };
           }
+          // The UI's {app} only changes once the outcome is known, so it never shows the one being tried.
+          setSoftwareName(SOFTWARE_NAMES[software]);
+          setState(connected);
           return;
         } catch (e) {
           firstError ??= { software, error: e as Error };
