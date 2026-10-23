@@ -1,0 +1,151 @@
+# Builds SoundCheck for Windows and macOS, with the plugin bundled, and publishes a release.
+#
+# - Push to main with a new version in src-tauri/tauri.conf.json: builds both platforms into a
+#   draft release v<version>, then publishes it once both succeed. A version that already has a
+#   tag is not built again.
+# - Run manually (Actions → Release → Run workflow): builds both platforms and keeps the
+#   installers as workflow artifacts, without a release.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src-tauri/tauri.conf.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        name: Read the app version and look for its tag
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Manual run: building v$version without a release."
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$version is already released; nothing to build."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing v$version."
+          fi
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: version
+    if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            args: ""
+          - name: macOS
+            # Xcode 16 (macOS 15 SDK) is what OBS's plugin build requires.
+            os: macos-15
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-15' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # OBS's sources and prebuilt dependencies, downloaded by the plugin's CMake setup.
+      - uses: actions/cache@v4
+        with:
+          path: obs-plugin/.deps
+          key: obs-deps-${{ runner.os }}-${{ hashFiles('obs-plugin/buildspec.json') }}
+
+      - name: Build the plugin (Windows, OBS and Streamlabs)
+        if: runner.os == 'Windows'
+        working-directory: obs-plugin
+        run: |
+          cmake --preset windows-x64
+          cmake --build build_x64 --config RelWithDebInfo
+          cmake --preset windows-x64 -B build_x64_streamlabs -DSOUNDCHECK_STREAMLABS=ON
+          cmake --build build_x64_streamlabs --config RelWithDebInfo
+          Get-Item build_x64/RelWithDebInfo/soundcheck.dll, build_x64_streamlabs/RelWithDebInfo/soundcheck-streamlabs.dll
+
+      - name: Build the plugin (macOS, OBS)
+        if: runner.os == 'macOS'
+        working-directory: obs-plugin
+        run: |
+          cmake --preset macos
+          cmake --build build_macos --config RelWithDebInfo
+          # tauri.macos.conf.json bundles the plugin from this path.
+          expected=build_macos/RelWithDebInfo/soundcheck.plugin
+          if [ ! -d "$expected" ]; then
+            echo "::error::$expected not found; plugin bundles in the build folder:"
+            find build_macos -name '*.plugin' -maxdepth 4
+            exit 1
+          fi
+          lipo -info "$expected/Contents/MacOS/soundcheck"
+
+      - run: npm ci
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+          # Only for a release: the draft is published by the publish job below.
+          tagName: ${{ needs.version.outputs.release == 'true' && format('v{0}', needs.version.outputs.version) || '' }}
+          releaseName: ${{ needs.version.outputs.release == 'true' && format('SoundCheck v{0}', needs.version.outputs.version) || '' }}
+          releaseBody: |
+            Windows: run the `.exe` (or `.msi`) installer. The app isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose "More info" → "Run anyway".
+            macOS: open the `.dmg` and drag SoundCheck to Applications. The app isn't notarized, so the first time, right-click it and choose "Open".
+          releaseDraft: true
+          prerelease: false
+
+      - name: Keep the installers (manual runs)
+        if: needs.version.outputs.release != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundCheck-${{ needs.version.outputs.version }}-${{ matrix.name }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [version, build]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft now that every platform is in it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${{ needs.version.outputs.version }}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
