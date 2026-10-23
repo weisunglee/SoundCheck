@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SoundHold, itemsToShow, presenceInScene, programAudibility, scenesContaining, sourceStatus } from "./status";
+import { SoundHold, itemsToHide, itemsToShow, presenceInScene, programAudibility, scenesContaining, sourceStatus } from "./status";
 import type { AudioSource, Scene } from "./types";
 
 const source = (name: string, patch: Partial<AudioSource> = {}): AudioSource => ({
@@ -89,6 +89,25 @@ describe("itemsToShow", () => {
   });
   it("returns nothing when the source is already visible", () => {
     expect(itemsToShow("Game", "Mic", scenes)).toEqual([]);
+  });
+});
+
+describe("itemsToHide", () => {
+  it("disables the source's own visible items, also inside nested scenes", () => {
+    expect(itemsToHide("Game", "Alerts", scenes).map((x) => `${x.sceneName}/${x.item.id}`)).toEqual(["Overlay/7"]);
+    expect(itemsToHide("Game", "Mic", scenes).map((x) => `${x.sceneName}/${x.item.id}`)).toEqual(["Game/1"]);
+  });
+  it("leaves the nested scene on, and ignores items hidden already", () => {
+    const hiddenOverlay: Scene[] = [
+      { name: "Game", items: [{ id: 2, sourceName: "Overlay", enabled: false, isScene: true }] },
+      { name: "Overlay", items: [{ id: 7, sourceName: "Alerts", enabled: true }] },
+    ];
+    expect(itemsToHide("Game", "Alerts", hiddenOverlay)).toEqual([]);
+    expect(itemsToHide("Chat", "Music", scenes)).toEqual([]);
+  });
+  it("is undone by itemsToShow", () => {
+    const hidden = scenes.map((sc) => ({ ...sc, items: sc.items.map((i) => (i.sourceName === "Alerts" ? { ...i, enabled: false } : i)) }));
+    expect(itemsToShow("Game", "Alerts", hidden).map((x) => `${x.sceneName}/${x.item.id}`)).toEqual(["Overlay/7"]);
   });
 });
 

@@ -16,6 +16,7 @@ import { meterPosition } from "../levels";
 import { uniqueName } from "../names";
 import type { AudioSource } from "../types";
 import { msg, t } from "../i18n";
+import { Icon, IconButton } from "./Icon";
 
 export type SoundKind = "input" | "output" | "app";
 
@@ -149,9 +150,7 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
       <div className="dialog wide">
         <div className="dialog-head">
           <h2 id="add-title">{t("新增聲音到直播軟體")}</h2>
-          <button type="button" className="link" onClick={onClose}>
-            {t("關閉")}
-          </button>
+          <IconButton icon="x" label={t("關閉")} className="close" onClick={onClose} />
         </div>
 
         {status.kind === "done" ? (
@@ -199,8 +198,9 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
         ) : !pick ? (
           <section className="wizard-section">
             <div className="row">
-              <button type="button" className="link" onClick={() => setKind(null)}>
-                {t("← 換一種聲音")}
+              <button type="button" className="link back" onClick={() => setKind(null)}>
+                <Icon name="arrow-left" size={14} />
+                {t("換一種聲音")}
               </button>
             </div>
             <h4 className="section-title">{kind === "app" ? t("選擇應用程式") : t("選擇裝置")}</h4>
@@ -223,8 +223,9 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
         ) : (
           <section className="wizard-section">
             <div className="row">
-              <button type="button" className="link" onClick={() => setPick(null)}>
-                {t("← 重新選擇")}
+              <button type="button" className="link back" onClick={() => setPick(null)}>
+                <Icon name="arrow-left" size={14} />
+                {t("重新選擇")}
               </button>
             </div>
             {pick.kind === "input" && pick.deviceId !== DEFAULT_DEVICE && local && (
@@ -232,9 +233,12 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
                 <span className="field-label">{t("確認是這個裝置")}</span>
                 <div className="pick-row">
                   <span className="pick-title">{devices.find((d) => d.id === pick.deviceId)?.name ?? pick.name}</span>
-                  <button type="button" className="btn small" onClick={() => toggleListen(pick.deviceId)}>
-                    {listening === pick.deviceId ? t("停止試聽") : t("試聽")}
-                  </button>
+                  <IconButton
+                    icon={listening === pick.deviceId ? "square" : "headphones"}
+                    label={listening === pick.deviceId ? t("停止試聽") : t("試聽")}
+                    aria-pressed={listening === pick.deviceId}
+                    onClick={() => toggleListen(pick.deviceId)}
+                  />
                 </div>
                 {listening === pick.deviceId && <Peak value={devices.find((d) => d.id === pick.deviceId)?.peak ?? 0} />}
                 <span className="hint">{t("按「試聽」後對著它說話，音量條有跳就是這一個。試聽時 Windows 會顯示麥克風使用中。")}</span>
@@ -259,6 +263,7 @@ export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, st
             </div>
             {status.kind === "error" && <div className="verdict verdict-bad">{status.message}</div>}
             <button type="button" className="btn primary" disabled={status.kind === "adding" || !name.trim() || nameTaken} onClick={add}>
+              {status.kind !== "adding" && <Icon name="plus" size={15} />}
               {status.kind === "adding" ? t("加入中…") : t("加進直播軟體")}
             </button>
           </section>
@@ -312,9 +317,12 @@ function DeviceList(props: {
               {coverage.sources.length > 0 && <span className="pick-detail">{t("已在直播軟體：{list}", { list: coverage.sources.join(t("、")) })}</span>}
             </button>
             {props.onListen && (
-              <button type="button" className="btn small" onClick={() => props.onListen!(d.id)}>
-                {isListening ? t("停止試聽") : t("試聽")}
-              </button>
+              <IconButton
+                icon={isListening ? "square" : "headphones"}
+                label={isListening ? t("停止試聽") : t("試聽")}
+                aria-pressed={isListening}
+                onClick={() => props.onListen!(d.id)}
+              />
             )}
           </li>
         );

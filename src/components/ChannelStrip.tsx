@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Capabilities } from "../adapter";
 import type { AudioSource, ChannelLevels, MonitorType, SourceStatus } from "../types";
+import { Icon, IconButton } from "./Icon";
 import { LevelMeter } from "./LevelMeter";
 import { StatusBadge } from "./StatusBadge";
 import { msg, t } from "../i18n";
@@ -37,8 +38,8 @@ interface Props {
   /** What the connected software lets SoundCheck change; unsupported controls are hidden. */
   caps: Capabilities;
   onAddStreamTracks: () => void;
-  /** Un-hide the source in the current scene. */
-  onShow: () => void;
+  /** Shows or hides the source in the current scene (the eye toggle). */
+  onVisible: (visible: boolean) => void;
 }
 
 export function ChannelStrip(props: Props) {
@@ -56,17 +57,22 @@ export function ChannelStrip(props: Props) {
           <h3>{source.name}</h3>
           <div className="dev">{t(source.device)}</div>
         </div>
-        {source.global && <span className="tag">{t("全域")}</span>}
+        {source.global ? (
+          <span className="tag">{t("全域")}</span>
+        ) : (
+          // Global devices aren't scene items, so only scene sources can be hidden.
+          <IconButton
+            icon={status === "hidden" ? "eye-off" : "eye"}
+            label={status === "hidden" ? t("在這個場景顯示") : t("在這個場景隱藏")}
+            className={status === "hidden" ? "off" : undefined}
+            onClick={() => props.onVisible(status === "hidden")}
+          />
+        )}
       </div>
       <StatusBadge kind={heard && !sounding ? "silent" : status} />
 
       {status === "hidden" && (
-        <div className="hint">
-          {t("在這個場景裡被隱藏了，觀眾聽不到。")}
-          <button type="button" className="link" onClick={props.onShow}>
-            {t("顯示它")}
-          </button>
-        </div>
+        <div className="hint">{t("在這個場景裡被隱藏了，觀眾聽不到。")}</div>
       )}
       {status === "offStream" && (
         <div className="hint">
@@ -123,8 +129,15 @@ export function ChannelStrip(props: Props) {
         </div>
       </div>
 
-      <button className="mute" type="button" aria-pressed={source.muted} onClick={() => props.onMuted(!source.muted)}>
-        {source.muted ? t("已靜音（按一下取消）") : t("靜音")}
+      <button
+        className="mute"
+        type="button"
+        aria-pressed={source.muted}
+        aria-label={source.muted ? t("取消靜音") : t("靜音")}
+        title={source.muted ? t("取消靜音") : t("靜音")}
+        onClick={() => props.onMuted(!source.muted)}
+      >
+        <Icon name={source.muted ? "volume-x" : "volume-2"} />
       </button>
 
       {props.caps.monitoringControl ? (
@@ -150,9 +163,13 @@ export function ChannelStrip(props: Props) {
       <div className="hint">{t(MONITOR_OPTIONS.find((o) => o.value === source.monitorType)?.explain ?? "")}</div>
 
       {(props.caps.balance || props.caps.syncOffset) && (
-        <button type="button" className="link more-toggle" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
-          {moreOpen ? t("收起更多設定") : t("更多設定")}
-        </button>
+        <IconButton
+          icon="sliders-horizontal"
+          label={moreOpen ? t("收起更多設定") : t("更多設定")}
+          className="more-toggle"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen(!moreOpen)}
+        />
       )}
       {moreOpen && (props.caps.balance || props.caps.syncOffset) && (
         <div className="more">
@@ -175,15 +192,12 @@ export function ChannelStrip(props: Props) {
           {props.caps.syncOffset && (
           <label className="field">
             <span className="field-label">
-              {t("聲音提早或延後")} <span className="field-value">{source.syncOffsetMs} ms</span>
+              {t("聲音提早或延後")}
             </span>
-            <span className="row">
-              <button type="button" className="btn small" onClick={() => props.onSyncOffset(source.syncOffsetMs - SYNC_STEP_MS)}>
-                {t("提早 {ms} ms", { ms: SYNC_STEP_MS })}
-              </button>
-              <button type="button" className="btn small" onClick={() => props.onSyncOffset(source.syncOffsetMs + SYNC_STEP_MS)}>
-                {t("延後 {ms} ms", { ms: SYNC_STEP_MS })}
-              </button>
+            <span className="row stepper">
+              <IconButton icon="minus" label={t("提早 {ms} ms", { ms: SYNC_STEP_MS })} onClick={() => props.onSyncOffset(source.syncOffsetMs - SYNC_STEP_MS)} />
+              <span className="field-value">{source.syncOffsetMs} ms</span>
+              <IconButton icon="plus" label={t("延後 {ms} ms", { ms: SYNC_STEP_MS })} onClick={() => props.onSyncOffset(source.syncOffsetMs + SYNC_STEP_MS)} />
             </span>
             <span className="hint">{t("嘴型和聲音對不上時用：聲音比畫面早就按「延後」。")}</span>
           </label>
@@ -208,7 +222,8 @@ export function ChannelStrip(props: Props) {
           </button>
         ))}
         <button type="button" className="chip add" onClick={props.onOpenFilters}>
-          {source.filters.length === 0 ? t("＋ 加濾鏡") : t("調整濾鏡")}
+          <Icon name={source.filters.length === 0 ? "plus" : "wand-sparkles"} size={13} />
+          {source.filters.length === 0 ? t("加濾鏡") : t("調整濾鏡")}
         </button>
       </div>
       </>

@@ -11,6 +11,7 @@ import type { SoftwareAdapter } from "../adapter";
 import type { AudioSource } from "../types";
 import type { AddSourceStart } from "./AddSourceWizard";
 import { t } from "../i18n";
+import { Icon } from "./Icon";
 
 interface Props {
   adapter: SoftwareAdapter;
@@ -70,6 +71,7 @@ export function SystemSounds({ adapter, sources, onAdd }: Props) {
               </div>
               {coverage.sources.length === 0 ? (
                 <button type="button" className="btn warn" onClick={() => onAdd({ kind: "app", app })}>
+                  <Icon name="plus" size={15} />
                   {t("加進直播軟體")}
                 </button>
               ) : (

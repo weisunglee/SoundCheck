@@ -86,6 +86,69 @@ input {
   cursor: pointer;
 }
 
+/* An icon next to a button's or link's text. */
+.btn,
+.link,
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.icon {
+  flex: none;
+  display: block;
+}
+
+/* A button that shows only an icon (its text is the tooltip and aria-label). */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--raised);
+  border-color: var(--line);
+  color: var(--fg);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.icon-btn[aria-pressed="true"],
+.icon-btn[aria-expanded="true"] {
+  color: var(--accent);
+}
+
+.icon-btn.danger:hover:not(:disabled) {
+  color: var(--hot);
+  border-color: color-mix(in srgb, var(--hot) 60%, transparent);
+}
+
+/* The eye toggle of a hidden source. */
+.icon-btn.off {
+  color: var(--warn);
+}
+
+/* A select with an icon in front of it (the language menu). */
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
+
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -254,6 +317,8 @@ input {
 }
 
 .mute {
+  display: grid;
+  place-items: center;
   border-radius: 7px;
   border: 1px solid var(--line);
   background: var(--raised);
@@ -556,6 +621,23 @@ body,
   justify-self: start;
   padding: 0;
   font-size: 12px;
+}
+
+.icon-btn.more-toggle {
+  padding: 0;
+}
+
+/* − value + for the sync offset. */
+.stepper {
+  align-items: center;
+  gap: 6px;
+}
+
+.stepper .field-value {
+  min-width: 56px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .more {

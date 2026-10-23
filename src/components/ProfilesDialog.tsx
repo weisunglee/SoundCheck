@@ -4,6 +4,7 @@ import type { SoftwareAdapter } from "../adapter";
 import { type ApplyResult, BACKUPS_KEPT, type Profile, applyProfile, backupName, captureProfile } from "../profiles";
 import type { AudioSource } from "../types";
 import { locale, t } from "../i18n";
+import { IconButton } from "./Icon";
 
 interface Summary {
   name: string;
@@ -93,9 +94,7 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
       <div className="dialog wide">
         <div className="dialog-head">
           <h2 id="profiles-title">{t("聲音設定檔")}</h2>
-          <button type="button" className="link" onClick={onClose}>
-            {t("關閉")}
-          </button>
+          <IconButton icon="x" label={t("關閉")} className="close" onClick={onClose} />
         </div>
         <p className="dialog-lead">
           {t("把所有聲音來源的音量、靜音、監聽、左右平衡、提早延後、音軌和聲音濾鏡存成一組，之後一鍵套用。套用前會自動備份目前的設定（保留最近 {n} 份），套錯可以還原。", { n: BACKUPS_KEPT })}
@@ -170,9 +169,7 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
                     <button type="button" className="btn small" disabled={working} onClick={() => askApply(p.name)}>
                       {t("套用")}
                     </button>
-                    <button type="button" className="btn small" disabled={working} onClick={() => setConfirm({ kind: "delete", name: p.name })}>
-                      {t("刪除")}
-                    </button>
+                    <IconButton icon="trash-2" label={t("刪除")} className="danger" disabled={working} onClick={() => setConfirm({ kind: "delete", name: p.name })} />
                   </div>
                 </li>
               ))}

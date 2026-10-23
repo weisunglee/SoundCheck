@@ -3,6 +3,7 @@ import { type AddSourceStart, AddSourceWizard } from "./components/AddSourceWiza
 import { ChannelStrip } from "./components/ChannelStrip";
 import { ConnectionGuide } from "./components/ConnectionGuide";
 import { FilterWizard } from "./components/FilterWizard";
+import { Icon } from "./components/Icon";
 import { PluginInstall } from "./components/PluginInstall";
 import { ProfilesDialog } from "./components/ProfilesDialog";
 import { SceneList } from "./components/SceneList";
@@ -19,7 +20,7 @@ import { useConnection } from "./connection";
 import { obsAdapter } from "./obsAdapter";
 import { assessPlugin, createPlugin, pluginApplies, usePluginFiles, usePluginInfo } from "./plugin";
 import { streamlabsAdapter } from "./streamlabsAdapter";
-import { SoundHold, type SourceWithStatus, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
+import { SoundHold, type SourceWithStatus, itemsToHide, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
 import type { SoftwareId } from "./software";
 import type { AudioSource } from "./types";
@@ -97,10 +98,12 @@ export default function App() {
       {state && (
         <>
           <button type="button" className="btn" onClick={() => setAddStart({})}>
-            {t("＋ 新增聲音")}
+            <Icon name="plus" size={15} />
+            {t("新增聲音")}
           </button>
           {caps.profiles && (
             <button type="button" className="btn" onClick={() => setProfilesOpen(true)}>
+              <Icon name="bookmark" size={15} />
               {t("設定檔")}
             </button>
           )}
@@ -108,6 +111,7 @@ export default function App() {
       )}
       {need !== "none" && (
         <button type="button" className="btn warn" onClick={() => openPluginDialog()}>
+          <Icon name="download" size={15} />
           {NEED_LABELS[need]}
         </button>
       )}
@@ -121,17 +125,21 @@ export default function App() {
         }
         onClick={() => setSoundTestOpen(true)}
       >
+        <Icon name="audio-lines" size={15} />
         {t("試音")}
       </button>
       )}
       <SoftwarePicker compact />
-      <select className="select" aria-label={t("語言")} value={lang} onChange={(e) => setLang(e.target.value as Lang)}>
-        {LANGUAGES.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.label}
-          </option>
-        ))}
-      </select>
+      <label className="with-icon" title={t("語言")}>
+        <Icon name="globe" size={15} />
+        <select className="select" aria-label={t("語言")} value={lang} onChange={(e) => setLang(e.target.value as Lang)}>
+          {LANGUAGES.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </label>
     </header>
   );
 
@@ -188,7 +196,9 @@ export default function App() {
       onOpenFilters={() => setFiltersFor(source.name)}
       caps={caps}
       onAddStreamTracks={() => audio.addStreamTracks(source.name)}
-      onShow={() => audio.showItems(itemsToShow(programScene, source.name, scenes))}
+      onVisible={(visible) =>
+        audio.setItemsVisible(visible ? itemsToShow(programScene, source.name, scenes) : itemsToHide(programScene, source.name, scenes), visible)
+      }
     />
   );
 

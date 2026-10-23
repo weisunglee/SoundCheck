@@ -24,7 +24,8 @@ export interface Audio {
   setFilterEnabled(source: string, filter: string, enabled: boolean): void;
   /** Adds the stream tracks to the source's tracks. */
   addStreamTracks(source: string): void;
-  showItems(items: { sceneName: string; item: SceneItem }[]): void;
+  /** Shows or hides scene items (the eye toggle). */
+  setItemsVisible(items: { sceneName: string; item: SceneItem }[], visible: boolean): void;
   switchScene(scene: string): void;
 }
 
@@ -141,9 +142,9 @@ export function useAudio(adapter: SoftwareAdapter | null): Audio {
       if (!adapter?.setTracks || !current || !source) return;
       send(adapter.setTracks(name, [...new Set([...source.tracks, ...current.streamTracks])].sort((a, b) => a - b)));
     },
-    showItems: (items) => {
+    setItemsVisible: (items, visible) => {
       if (!adapter) return;
-      for (const { sceneName, item } of items) send(adapter.setItemVisible(sceneName, item, true));
+      for (const { sceneName, item } of items) send(adapter.setItemVisible(sceneName, item, visible));
     },
     switchScene: (programScene) => {
       if (!adapter) return;

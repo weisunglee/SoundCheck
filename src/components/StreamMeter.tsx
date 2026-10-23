@@ -4,6 +4,7 @@ import { loudnessVerdict } from "../loudnessVerdict";
 import type { StreamLevel } from "../streamTap";
 import type { AudioSource } from "../types";
 import { t } from "../i18n";
+import { Icon } from "./Icon";
 
 interface Props {
   level: StreamLevel | null;
@@ -54,6 +55,7 @@ export function StreamMeter({ level, running, pluginLoaded, streamPaused, source
         <p className="hint">
           {t("要看到觀眾真正聽到的音量，需要在直播軟體安裝外掛。")}
           <button type="button" className="link" onClick={onInstallPlugin}>
+            <Icon name="download" size={14} />
             {t("安裝外掛")}
           </button>
         </p>

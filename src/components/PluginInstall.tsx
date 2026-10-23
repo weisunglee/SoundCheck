@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { outputsActive } from "../obsAdapter";
 import { assessPlugin, usePluginFiles } from "../plugin";
+import { IconButton } from "./Icon";
 import { t } from "../i18n";
 
 interface InstallError {
@@ -102,9 +103,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
       <div className="dialog">
         <div className="dialog-head">
           <h2 id="plugin-title">{status.installed ? t("更新直播軟體外掛") : t("安裝直播軟體外掛")}</h2>
-          <button type="button" className="link" onClick={() => (logEvent("closed dialog"), onClose())}>
-            {t("關閉")}
-          </button>
+          <IconButton icon="x" label={t("關閉")} className="close" onClick={() => (logEvent("closed dialog"), onClose())} />
         </div>
         <p className="dialog-lead">
           {t("試音需要在直播軟體裡裝一個小外掛。它只會讀取直播的聲音，不會改變你的場景或設定。")}

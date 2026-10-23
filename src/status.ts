@@ -80,6 +80,30 @@ export function itemsToShow(sceneName: string, sourceName: string, scenes: Scene
   return [...found.values()];
 }
 
+/**
+ * The scene items to disable so `sourceName` is hidden in `sceneName`: its own items that are
+ * visible there. Nested scenes and groups on the way stay as they are, since they hold other
+ * sources too.
+ */
+export function itemsToHide(sceneName: string, sourceName: string, scenes: Scene[]): { sceneName: string; item: SceneItem }[] {
+  const byName = new Map(scenes.map((s) => [s.name, s]));
+  const found = new Map<string, { sceneName: string; item: SceneItem }>();
+
+  const walk = (name: string, seen: Set<string>) => {
+    const scene = byName.get(name);
+    if (!scene || seen.has(name)) return;
+    const next = new Set(seen).add(name);
+    for (const item of scene.items) {
+      if (!item.enabled) continue;
+      if (item.sourceName === sourceName) found.set(`${name}/${item.id}`, { sceneName: name, item });
+      if (item.isScene) walk(item.sourceName, next);
+    }
+  };
+
+  walk(sceneName, new Set());
+  return [...found.values()];
+}
+
 /** A meter position above this (about -57 dBFS) counts as "making sound". */
 const SOUND_THRESHOLD = 0.05;
 /** Keep counting a source as making sound this long after its last loud moment, so pauses in speech don't flicker. */

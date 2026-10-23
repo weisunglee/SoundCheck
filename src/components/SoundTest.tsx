@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { loudnessVerdict } from "../loudnessVerdict";
 import type { Plugin } from "../plugin";
 import { t } from "../i18n";
+import { Icon, IconButton } from "./Icon";
 
 interface Summary {
   durationSec: number;
@@ -100,9 +101,7 @@ export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
       <div className="dialog">
         <div className="dialog-head">
           <h2 id="sound-test-title">{t("試音")}</h2>
-          <button type="button" className="link" onClick={close}>
-            {t("關閉")}
-          </button>
+          <IconButton icon="x" label={t("關閉")} className="close" onClick={close} />
         </div>
         <p className="dialog-lead">
           {t("錄一段直播軟體真正送出去的聲音，再播放給你聽。播放的時候，觀眾會暫時聽不到聲音，播完自動恢復。")}
@@ -120,6 +119,7 @@ export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
             </div>
             <p className="hint">{t("開始後請照平常直播的方式說話、玩遊戲或放音樂。")}</p>
             <button type="button" className="btn primary" onClick={record}>
+              <Icon name="circle" size={15} />
               {t("開始錄音")}
             </button>
           </div>
@@ -142,6 +142,7 @@ export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
               <b style={{ width: `${(phase.elapsed / seconds) * 100}%` }} />
             </div>
             <button type="button" className="btn" onClick={() => invoke("sound_test_stop_recording")}>
+              <Icon name="square" size={15} />
               {t("提前停止")}
             </button>
           </div>
@@ -172,15 +173,18 @@ export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
                   <b style={{ width: `${(phase.position / summary.durationSec) * 100}%` }} />
                 </div>
                 <button type="button" className="btn" onClick={() => invoke("sound_test_stop_playback")}>
+                  <Icon name="square" size={15} />
                   {t("停止播放")}
                 </button>
               </>
             ) : (
               <div className="row">
                 <button type="button" className="btn primary" onClick={() => play(summary)}>
+                  <Icon name="play" size={15} />
                   {t("播放給我聽")}
                 </button>
                 <button type="button" className="btn" onClick={record}>
+                  <Icon name="rotate-ccw" size={15} />
                   {t("重錄")}
                 </button>
               </div>
@@ -192,6 +196,7 @@ export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
           <div className="dialog-body">
             <div className="verdict verdict-bad">{phase.message}</div>
             <button type="button" className="btn" onClick={() => setPhase({ kind: "idle" })}>
+              <Icon name="rotate-ccw" size={15} />
               {t("重新開始")}
             </button>
           </div>

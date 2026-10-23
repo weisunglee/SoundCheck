@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FilterOps, SourceFilter } from "../adapter";
 import { FILTERS, PROBLEMS, addFilter } from "../filters";
 import { t } from "../i18n";
+import { Icon, IconButton } from "./Icon";
 
 type Settings = Record<string, string | number | boolean>;
 
@@ -62,9 +63,7 @@ export function FilterWizard({ ops, sourceName, inputDb, onClose }: Props) {
       <div className="dialog wide">
         <div className="dialog-head">
           <h2 id="filter-title">{t("{source} 的聲音處理", { source: sourceName })}</h2>
-          <button type="button" className="link" onClick={onClose}>
-            {t("關閉")}
-          </button>
+          <IconButton icon="x" label={t("關閉")} className="close" onClick={onClose} />
         </div>
 
         {error && <div className="verdict verdict-bad">{error}</div>}
@@ -178,12 +177,8 @@ function FilterCard(props: CardProps) {
         </label>
         {filter.name !== t(info.label) && <span className="tag">{t(info.label)}</span>}
         <span className="spacer" />
-        <button type="button" className="btn small" disabled={props.busy || props.first} onClick={() => props.onMove(-1)} aria-label={t("往上移")}>
-          ↑
-        </button>
-        <button type="button" className="btn small" disabled={props.busy || props.last} onClick={() => props.onMove(1)} aria-label={t("往下移")}>
-          ↓
-        </button>
+        <IconButton icon="arrow-up" label={t("往上移")} disabled={props.busy || props.first} onClick={() => props.onMove(-1)} />
+        <IconButton icon="arrow-down" label={t("往下移")} disabled={props.busy || props.last} onClick={() => props.onMove(1)} />
         {confirmRemove ? (
           <>
             <button type="button" className="btn small danger" disabled={props.busy} onClick={props.onRemove}>
@@ -194,15 +189,14 @@ function FilterCard(props: CardProps) {
             </button>
           </>
         ) : (
-          <button type="button" className="btn small" disabled={props.busy} onClick={() => setConfirmRemove(true)}>
-            {t("移除")}
-          </button>
+          <IconButton icon="trash-2" label={t("移除")} className="danger" disabled={props.busy} onClick={() => setConfirmRemove(true)} />
         )}
       </div>
       <p className="filter-what">{t(info.what)}</p>
       {editor ? (
         <>
           <button type="button" className="link more-toggle" aria-expanded={props.expanded} onClick={props.onToggleExpanded}>
+            <Icon name={props.expanded ? "chevron-up" : "chevron-down"} size={14} />
             {props.expanded ? t("收起設定") : t("調整設定")}
           </button>
           {props.expanded && editor({ settings, change, inputDb: props.inputDb })}
