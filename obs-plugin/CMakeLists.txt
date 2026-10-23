@@ -19,6 +19,7 @@ find_package(libobs REQUIRED)
 
 add_library(${CMAKE_PROJECT_NAME} MODULE
   src/requests.cpp
+  src/source-meters.cpp
   src/stream-pause.cpp
   src/tap.cpp
 )

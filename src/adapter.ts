@@ -64,8 +64,8 @@ export interface Changes {
 
 export interface SoftwareAdapter {
   id: SoftwareId;
-  /** Whether `watch` reports live levels. */
-  meters: boolean;
+  /** Whether `watch` reports live levels: always, never, or while the SoundCheck plugin is loaded. */
+  meters: boolean | "withPlugin";
   load(): Promise<AudioState>;
   /** Starts reporting changes; returns a function that stops. */
   watch(changes: Changes): () => void;
@@ -107,9 +107,10 @@ export interface Capabilities {
   profiles: boolean;
 }
 
-export function capabilitiesOf(adapter: SoftwareAdapter): Capabilities {
+/** `pluginLoaded`: the SoundCheck plugin answers, which some adapters need for meters. */
+export function capabilitiesOf(adapter: SoftwareAdapter, pluginLoaded = false): Capabilities {
   const caps = {
-    meters: adapter.meters,
+    meters: adapter.meters === true || (adapter.meters === "withPlugin" && pluginLoaded),
     monitoringControl: Boolean(adapter.setMonitorType),
     tracksControl: Boolean(adapter.setTracks),
     balance: Boolean(adapter.setBalance),

@@ -39,6 +39,7 @@ const MESSAGES: &[[&str; 5]] = &[
     ["還沒接上直播的聲音，請確認直播軟體的外掛已經載入。", "还没接上直播的声音，请确认直播软件的插件已经加载。", "Not connected to the stream audio yet. Check that the streaming software has loaded the plugin.", "まだ配信の音声に接続していません。配信ソフトがプラグインを読み込んでいるか確認してください。", "아직 방송 오디오에 연결되지 않았습니다. 방송 프로그램이 플러그인을 로드했는지 확인하세요."],
     ["已經在錄音了", "已经在录音了", "Already recording.", "すでに録音中です。", "이미 녹음 중입니다."],
     ["錄音時沒有收到聲音，和外掛的連線可能中斷了。", "录音时没有收到声音，和插件的连接可能中断了。", "No audio arrived while recording. The connection to the plugin may have dropped.", "録音中に音声が届きませんでした。プラグインとの接続が切れた可能性があります。", "녹음 중에 오디오가 들어오지 않았습니다. 플러그인과의 연결이 끊겼을 수 있습니다."],
+    ["這個平台不能從這裡開啟直播軟體。", "这个平台不能从这里打开直播软件。", "The streaming software can't be opened from here on this platform.", "このプラットフォームではここから配信ソフトを起動できません。", "이 플랫폼에서는 여기서 방송 프로그램을 열 수 없습니다."],
     ["這個平台還不支援試聽音量", "这个平台还不支持试听音量", "Level preview isn't supported on this platform yet.", "このプラットフォームではまだ音量の試聴に対応していません。", "이 플랫폼에서는 아직 음량 미리 듣기를 지원하지 않습니다."],
     ["試聽失敗", "试听失败", "The level preview failed.", "試聴できませんでした。", "미리 듣기에 실패했습니다."],
     ["無法開啟這個裝置：{e}", "无法打开这个设备：{e}", "Couldn't open this device: {e}", "このデバイスを開けません：{e}", "이 장치를 열 수 없습니다: {e}"],

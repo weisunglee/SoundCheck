@@ -3,13 +3,15 @@
 #include <cstring>
 #include <obs-module.h>
 
+#include "source-meters.hpp"
 #include "stream-pause.hpp"
 #include "tap.hpp"
 
 static Tap g_tap;
 static StreamPause g_pause;
+static SourceMeters g_meters;
 
-const char *const kRequestNames[] = {"GetInfo", "StartTap", "StopTap", "PauseStreamAudio", "Heartbeat", "ResumeStreamAudio"};
+const char *const kRequestNames[] = {"GetInfo", "StartTap", "StopTap", "PauseStreamAudio", "Heartbeat", "ResumeStreamAudio", "GetSourceLevels"};
 const size_t kRequestCount = sizeof(kRequestNames) / sizeof(kRequestNames[0]);
 
 static void set_error(obs_data_t *response, const char *message)
@@ -95,8 +97,15 @@ static void resume_stream_audio(const Host &, obs_data_t *, obs_data_t *response
     obs_data_set_bool(response, "ok", true);
 }
 
+// "GetSourceLevels": every audio source's levels since the last call (see source-meters.hpp).
+static void get_source_levels(const Host &, obs_data_t *, obs_data_t *response)
+{
+    g_meters.read(response);
+}
+
 using Handler = void (*)(const Host &, obs_data_t *, obs_data_t *);
-static const Handler kHandlers[] = {get_info, start_tap, stop_tap, pause_stream_audio, heartbeat, resume_stream_audio};
+static const Handler kHandlers[] = {get_info,  start_tap,           stop_tap,         pause_stream_audio,
+                                    heartbeat, resume_stream_audio, get_source_levels};
 static_assert(sizeof(kHandlers) / sizeof(kHandlers[0]) == sizeof(kRequestNames) / sizeof(kRequestNames[0]));
 
 bool handle_request(const Host &host, const char *type, obs_data_t *request, obs_data_t *response)
@@ -120,4 +129,5 @@ void requests_shutdown()
 {
     g_pause.resume();
     g_tap.stop();
+    g_meters.stop();
 }

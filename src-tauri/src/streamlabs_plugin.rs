@@ -10,6 +10,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -117,6 +118,16 @@ struct Control {
     token: String,
 }
 
+/// One connection to the plugin, kept open: the level meters ask ten times a second.
+struct Connection {
+    token: String,
+    reader: BufReader<TcpStream>,
+}
+
+static CONNECTION: Mutex<Option<Connection>> = Mutex::new(None);
+
+const NOT_LOADED: &str = "notLoaded";
+
 /// Sends one request to the loaded plugin and returns its answer. Fails with "notLoaded" when
 /// no plugin is listening (not installed, not loaded yet, or a control file from an earlier run).
 #[tauri::command]
@@ -126,21 +137,57 @@ pub async fn streamlabs_plugin_request(request_type: String, request_data: Value
         .map_err(|e| e.to_string())?
 }
 
-fn request(request_type: &str, request_data: Value) -> Result<Value, String> {
-    const NOT_LOADED: &str = "notLoaded";
+fn connect() -> Result<Connection, String> {
     let path = control_path().ok_or(NOT_LOADED)?;
     let control: Control = std::fs::read_to_string(path)
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .ok_or(NOT_LOADED)?;
-    let mut socket =
+    let socket =
         TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], control.port)), CONNECT_TIMEOUT).map_err(|_| NOT_LOADED)?;
     socket.set_read_timeout(Some(ANSWER_TIMEOUT)).map_err(|e| e.to_string())?;
+    Ok(Connection { token: control.token, reader: BufReader::new(socket) })
+}
 
-    let line = serde_json::json!({ "token": control.token, "requestType": request_type, "requestData": request_data });
-    socket.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())?;
+enum Failure {
+    /// The plugin had already closed the connection (idle, or Streamlabs restarted); the
+    /// request never reached it, so it is safe to send again on a new connection.
+    Closed,
+    Other(String),
+}
+
+fn exchange(connection: &mut Connection, request_type: &str, request_data: &Value) -> Result<Value, Failure> {
+    let line = serde_json::json!({ "token": connection.token, "requestType": request_type, "requestData": request_data });
+    connection.reader.get_mut().write_all(format!("{line}\n").as_bytes()).map_err(|_| Failure::Closed)?;
     let mut answer = String::new();
-    BufReader::new(&socket).read_line(&mut answer).map_err(|e| e.to_string())?;
-    // A different program on a reused port won't answer in JSON.
-    serde_json::from_str(&answer).map_err(|_| NOT_LOADED.to_string())
+    match connection.reader.read_line(&mut answer) {
+        Ok(0) => Err(Failure::Closed),
+        Ok(_) => serde_json::from_str(&answer).map_err(|_| Failure::Other(NOT_LOADED.to_string())),
+        Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset || e.kind() == std::io::ErrorKind::ConnectionAborted => {
+            Err(Failure::Closed)
+        }
+        Err(e) => Err(Failure::Other(e.to_string())),
+    }
+}
+
+fn request(request_type: &str, request_data: Value) -> Result<Value, String> {
+    let mut current = CONNECTION.lock().unwrap_or_else(|e| e.into_inner());
+    for attempt in 0..2 {
+        if current.is_none() {
+            *current = Some(connect()?);
+        }
+        match exchange(current.as_mut().unwrap(), request_type, &request_data) {
+            Ok(answer) => return Ok(answer),
+            Err(Failure::Closed) if attempt == 0 => *current = None,
+            Err(Failure::Closed) => {
+                *current = None;
+                return Err(NOT_LOADED.to_string());
+            }
+            Err(Failure::Other(e)) => {
+                *current = None;
+                return Err(e);
+            }
+        }
+    }
+    unreachable!()
 }

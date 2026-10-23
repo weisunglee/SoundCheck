@@ -124,14 +124,14 @@ function isLoopback(host: string | undefined): boolean {
 const RETRY_EVENT = "soundcheck:retry-connection";
 
 async function connectToStreamlabs(presence: SoftwarePresence): Promise<void> {
-  if (!presence.streamlabs.ready) throw new ConnectError("streamlabsNotRunning", t("Streamlabs 沒有在執行，或還沒準備好。"));
+  if (!presence.streamlabs.ready) throw new ConnectError("streamlabsNotRunning", t("直播軟體沒有在執行，或還沒準備好。"));
   try {
     await streamlabs.connect();
     // Any request proves the API answers (it holds requests while a scene collection loads).
     await streamlabs.request("ScenesService", "activeSceneId");
   } catch {
     streamlabs.disconnect();
-    throw new ConnectError("streamlabsNotRunning", t("連不上 Streamlabs。"));
+    throw new ConnectError("streamlabsNotRunning", t("連不上直播軟體"));
   }
 }
 

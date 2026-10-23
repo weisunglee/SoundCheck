@@ -338,21 +338,16 @@ const table: Record<string, string> = {
   "，其中 {n} 個現在沒有聲音進來": ", {n} of them silent right now",
   "，直播用的是音軌 {tracks}。": "; the stream uses track {tracks}.",
   "；另外 {n} 個在場景裡但觀眾聽不到": "; {n} more are in the scene but not heard",
-  "{app} 不提供來源音量表和左右平衡，所以這兩項在 {app} 上無法使用；直播音量表、試音和其他設定都可以正常使用。": "{app} provides no source level meters or balance, so those two aren't available in {app}; the stream meter, the sound test and everything else work.",
   "{app} 不支援設定檔。": "{app} doesn't support profiles.",
   "{app} 不提供音量表": "{app} doesn't provide level meters",
-  "Streamlabs 沒有在執行": "Streamlabs isn't running",
-  "開啟 Streamlabs Desktop 後這裡會自動連上，不需要設定或輸入 Token。": "Open Streamlabs Desktop and this connects automatically; no setup or token needed.",
-  "Streamlabs 能讓 SoundCheck 調整的項目比較少：可以調音量、靜音、切換場景和顯示來源，但沒有音量表、濾鏡、試音，監聽和音軌也只能看不能改。": "Streamlabs lets SoundCheck do less: volume, mute, switching scenes and showing sources work, but there are no level meters, filters or sound check, and monitoring and tracks can only be viewed.",
   "直播軟體": "Streaming software",
   "自動偵測": "Detect automatically",
   "要連線的直播軟體": "Streaming software to connect to",
-  "Streamlabs 沒有在執行，或還沒準備好。": "Streamlabs isn't running or isn't ready yet.",
-  "連不上 Streamlabs。": "Can't connect to Streamlabs.",
   "這次會一併移除改名前的舊版外掛（obs-audio-kit）。": "This also removes the old plugin from before the rename (obs-audio-kit).",
   "直播軟體開著時，舊版外掛的檔案會被鎖住、無法更新。請你自己關閉它，這樣可以先結束直播、存好設定。關閉後這裡會自動往下一步。": "While the streaming software runs, the old plugin's file is locked and can't be updated. Close it yourself, so you can end the stream and save your work first. This moves on by itself once it's closed.",
   "載入外掛": "Load the plugin",
   "直播軟體開啟時會自動載入新外掛，請開啟它。": "The streaming software loads the new plugin when it starts; please open it.",
+  "直播軟體沒有在執行，或還沒準備好。": "The streaming software isn't running, or isn't ready yet.",
 };
 
 export default table;

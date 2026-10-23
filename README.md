@@ -131,7 +131,8 @@ Streamlabs Desktop 沒有 obs-websocket，也沒有 OBS 主程式的介面，但
 - **安裝**：複製到上面的資料夾，不需要系統管理員權限。第一次安裝不用重開 Streamlabs，App 會叫它立刻載入（每次連線最多一次，且只在外掛沒回應時，避免載入兩次）；更新時 Streamlabs 必須先關閉，因為它開著時一直鎖住已載入的 DLL
 - **Streamlabs 的 libobs 不一樣的地方**：為了同時輸出橫式和直式畫面，它對每個畫面各混一次音，把混音送給每個音訊回呼，而且會把回呼的 `param` 當成 `obs_encoder` 讀取。所以 tap 傳一塊全零的 `param`、不請 libobs 轉換格式（libobs 的轉換器會同時吃到兩個畫面的聲音）、依時間戳記只留第一份（主畫面），再自己轉成 48 kHz。這在 OBS 上效果相同
 - **暫停直播聲音**：外掛直接改 libobs 的音軌設定，Streamlabs 自己記錄的音軌設定不變，所以暫停期間它存檔或當掉，存下的仍是原本的設定
-- 驗證：`node tools/verify-streamlabs-plugin.mjs`（載入、控制埠與 token、tap 取樣率、暫停／心跳／恢復／自動恢復、Streamlabs 的音軌設定不變，14 項）在實際的 Streamlabs（libobs 31.1.2sl）上通過
+- **來源音量表**：Streamlabs 不給外部程式音量資料，外掛用 libobs 自己的音量表（`obs_volmeter`，Streamlabs 和 OBS 的混音器也用它）量每個音訊來源，App 每 100 ms 用 `GetSourceLevels` 讀一次，格式和 obs-websocket 的 `InputVolumeMeters` 相同。所以控制連線是一條持續的連線（`streamlabs_plugin.rs`），不是每個請求開一條；沒裝外掛時不顯示音量條
+- 驗證：`node tools/verify-streamlabs-plugin.mjs`（載入、控制埠與 token、tap 取樣率、暫停／心跳／恢復／自動恢復、Streamlabs 的音軌設定不變，14 項）在實際的 Streamlabs（libobs 31.1.2sl）上通過；來源音量表（工具加上的 3 項）目前只在 App 裡實際看過，工具還沒對 0.4.0 跑過
 
 | 平台 | 外掛資料夾 | 需要系統管理員權限 |
 |---|---|---|

@@ -20,23 +20,29 @@ export function ConnectionGuide({ failure, presence }: Props) {
   const obsRunning = presence.obs.running;
   const isObs = failure.software === "obs";
 
-  const openObs = obsRunning === false && (
-    <button type="button" className="btn primary" onClick={() => invoke("launch_obs").catch(() => {})}>
+  const launchButton = (command: "launch_obs" | "launch_streamlabs") => (
+    <button type="button" className="btn primary" onClick={() => invoke(command).catch(() => {})}>
       {t("開啟直播軟體")}
     </button>
   );
+  const openObs = obsRunning === false && launchButton("launch_obs");
 
   let title: string;
   let body: React.ReactNode;
   switch (failure.reason) {
     case "streamlabsNotRunning":
-      title = t("Streamlabs 沒有在執行");
-      body = (
-        <>
-          <p>{t("開啟 Streamlabs Desktop 後這裡會自動連上，不需要設定或輸入 Token。")}</p>
-          <p className="hint">{t("Streamlabs 能讓 SoundCheck 調整的項目比較少：可以調音量、靜音、切換場景和顯示來源，但沒有音量表、濾鏡、試音，監聽和音軌也只能看不能改。")}</p>
-        </>
-      );
+      if (!presence.streamlabs.running) {
+        title = t("直播軟體沒有在執行");
+        body = (
+          <>
+            <p>{t("開啟直播軟體後這裡會自動連上。")}</p>
+            {launchButton("launch_streamlabs")}
+          </>
+        );
+      } else {
+        title = t("連不上直播軟體");
+        body = <p>{t("直播軟體剛開啟的話，等幾秒就會連上。")}</p>;
+      }
       break;
     case "disabled":
       title = t("請在 {app} 開啟 WebSocket 伺服器");

@@ -27,6 +27,7 @@ pub fn run() {
             slobs::slobs_connect,
             slobs::slobs_send,
             slobs::slobs_disconnect,
+            slobs::launch_streamlabs,
             obs_config::read_obs_websocket_config,
             plugin_install::plugin_status,
             plugin_install::install_plugin,

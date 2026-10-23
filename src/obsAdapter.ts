@@ -2,11 +2,11 @@
 // the interface offers, and reports every change as an event.
 import type { RequestBatchRequest } from "obs-websocket-js";
 import { AUDIO_FILTER_KINDS, type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
-import { meterPosition, toDb } from "./levels";
+import { readMeters } from "./levels";
 import { obs } from "./obsClient";
 import { obsPlugin, obsPluginLink } from "./plugin";
 import { CAPTURE_KIND_SET } from "./systemAudio";
-import type { AudioSource, ChannelLevels, Filter, MonitorType, Scene, SceneItem } from "./types";
+import type { AudioSource, Filter, MonitorType, Scene, SceneItem } from "./types";
 
 const STRUCTURE_EVENTS = [
   "SceneCreated",
@@ -222,16 +222,9 @@ export const obsAdapter: SoftwareAdapter = {
       [
         "InputVolumeMeters",
         (e) => {
-          const levels: Record<string, ChannelLevels> = {};
-          const inputDb: Record<string, number> = {};
-          for (const input of e.inputs as { inputName: string; inputLevelsMul: number[][] }[]) {
-            // inputLevelsMul is [channel][magnitude, peak, inputPeak]; meters use the post-fader peak.
-            const [l, r] = input.inputLevelsMul;
-            const left = meterPosition(l?.[1] ?? 0);
-            levels[input.inputName] = [left, r ? meterPosition(r[1]) : left];
-            const rawPeak = toDb(Math.max(0, ...input.inputLevelsMul.map((ch) => ch[2] ?? 0)));
-            if (rawPeak !== null) inputDb[input.inputName] = rawPeak;
-          }
+          // inputLevelsMul is [channel][magnitude, peak, inputPeak].
+          const inputs = e.inputs as { inputName: string; inputLevelsMul: number[][] }[];
+          const { levels, inputDb } = readMeters(inputs.map((i) => ({ name: i.inputName, channels: i.inputLevelsMul })));
           changes.levels(levels, inputDb);
         },
       ],

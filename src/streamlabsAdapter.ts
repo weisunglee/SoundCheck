@@ -3,12 +3,13 @@
 // The documented API only sets volume, mute, scene and item visibility. Monitoring, tracks, sync
 // offset and filters go through Streamlabs' own internal objects, which its API forwards calls to
 // when the documented object lacks the method (AudioSource.setSettings, SourceFiltersService).
-// tools/verify-streamlabs.ts checks those against a real install. There is no balance, and no
-// way to read levels from outside, so the adapter has neither. The SoundCheck plugin's Streamlabs
-// build (obs-plugin/src/plugin-streamlabs.cpp) brings the stream meter and sound test.
+// tools/verify-streamlabs.ts checks those against a real install. There is no balance. Streamlabs
+// gives no levels to outside programs; the SoundCheck plugin's Streamlabs build
+// (obs-plugin/src/plugin-streamlabs.cpp) brings them, along with the stream meter and sound test.
 import { invoke } from "@tauri-apps/api/core";
-import { AUDIO_FILTER_KINDS, type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
+import { AUDIO_FILTER_KINDS, type AudioState, type CaptureSettings, type Changes, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
 import { NotLoadedError, type PluginLink } from "./plugin";
+import { readMeters } from "./levels";
 import { iecDbToDeflection, streamlabs } from "./streamlabs";
 import { CAPTURE_KIND_SET } from "./systemAudio";
 import type { AudioSource, Filter, MonitorType, Scene } from "./types";
@@ -278,9 +279,43 @@ const pluginLink: PluginLink = {
   },
 };
 
+/** How often the meters ask the plugin for levels (obs-websocket sends them every 50 ms). */
+const LEVELS_MS = 100;
+/** How long to wait before asking again while the plugin doesn't answer. */
+const LEVELS_RETRY_MS = 2000;
+
+/** Reads the plugin's source levels while watched; libobs names sources by Streamlabs' sourceId. */
+function watchLevels(changes: Changes): () => void {
+  let alive = true;
+  let timer: ReturnType<typeof setTimeout>;
+  const poll = async () => {
+    let next = LEVELS_MS;
+    try {
+      const answer = (await pluginLink.request("GetSourceLevels", {})) as {
+        inputs?: { name: string; levels: { magnitude: number; peak: number; inputPeak: number }[] }[];
+      };
+      const readings = (answer.inputs ?? []).flatMap(({ name, levels }) => {
+        const appName = ids.names.get(name);
+        return appName ? [{ name: appName, channels: levels.map((c) => [c.magnitude, c.peak, c.inputPeak]) }] : [];
+      });
+      const { levels, inputDb } = readMeters(readings);
+      if (alive) changes.levels(levels, inputDb);
+    } catch {
+      // No plugin (or not yet): no meters.
+      next = LEVELS_RETRY_MS;
+    }
+    if (alive) timer = setTimeout(poll, next);
+  };
+  poll();
+  return () => {
+    alive = false;
+    clearTimeout(timer);
+  };
+}
+
 export const streamlabsAdapter: SoftwareAdapter = {
   id: "streamlabs",
-  meters: false,
+  meters: "withPlugin",
   load,
 
   watch(changes) {
@@ -298,6 +333,7 @@ export const streamlabsAdapter: SoftwareAdapter = {
         else if (s.muted !== undefined) changes.patchSource(s.name, { muted: s.muted });
       }),
       ...STRUCTURE_EVENTS.map(([service, channel]) => streamlabs.on(service, channel, changes.reload)),
+      watchLevels(changes),
     ];
     return () => offs.forEach((off) => off());
   },

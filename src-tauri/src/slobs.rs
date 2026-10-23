@@ -5,7 +5,6 @@
 //! when the connection ends. Both carry the connection number `slobs_connect` returned, so the
 //! UI can ignore stragglers from a connection it already replaced.
 
-#[cfg(not(target_os = "windows"))]
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -113,4 +112,49 @@ where
         }
         let _ = app.emit("slobs-closed", connection);
     });
+}
+
+/// Starts Streamlabs Desktop, for the connection guide's button.
+#[tauri::command]
+pub fn launch_streamlabs() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+
+        let exe = windows_streamlabs_exe().unwrap_or_else(|| PathBuf::from(r"C:\Program Files\Streamlabs OBS\Streamlabs OBS.exe"));
+        std::process::Command::new(&exe)
+            .current_dir(exe.parent().unwrap_or(&exe))
+            .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| trf("無法開啟直播軟體：{e}", &[("e", &e)]))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-a", "Streamlabs Desktop"])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| trf("無法開啟直播軟體：{e}", &[("e", &e)]))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Err(crate::i18n::tr("這個平台不能從這裡開啟直播軟體。"))
+    }
+}
+
+/// The executable named by Streamlabs' uninstall entry (its DisplayIcon is "…\Streamlabs OBS.exe,0").
+#[cfg(target_os = "windows")]
+fn windows_streamlabs_exe() -> Option<PathBuf> {
+    let output = std::process::Command::new("reg")
+        .args(["query", r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "/s", "/v", "DisplayIcon"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line = text.lines().find(|l| l.contains("REG_SZ") && l.contains("Streamlabs"))?;
+    let value = line.split("REG_SZ").nth(1)?.trim();
+    let path = PathBuf::from(value.rsplit_once(',').map_or(value, |(path, _)| path));
+    path.exists().then_some(path)
 }

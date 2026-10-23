@@ -2,9 +2,8 @@
 // (src/adapter.ts). Loads on connect, applies the changes the adapter reports, reloads after
 // structural changes, and updates the UI right away when the user changes something.
 import { useEffect, useRef, useState } from "react";
-import { type AudioState, type Capabilities, type SoftwareAdapter, capabilitiesOf } from "./adapter";
+import type { AudioState, SoftwareAdapter } from "./adapter";
 import { t } from "./i18n";
-import { obsAdapter } from "./obsAdapter";
 import type { AudioSource, ChannelLevels, MonitorType, SceneItem } from "./types";
 
 const RELOAD_DEBOUNCE_MS = 300;
@@ -12,8 +11,6 @@ const RELOAD_DEBOUNCE_MS = 300;
 export interface Audio {
   /** Null while nothing is connected. */
   adapter: SoftwareAdapter | null;
-  /** What the UI may offer; while nothing is connected, OBS's (the fully supported one). */
-  capabilities: Capabilities;
   state: AudioState | null;
   levels: Record<string, ChannelLevels>;
   /** Pre-fader input peak per source in dBFS (absent while silent), for filter tuning. */
@@ -31,7 +28,7 @@ export interface Audio {
   switchScene(scene: string): void;
 }
 
-/** Setters for what the adapter can't do are no-ops; `capabilities` tells the UI to hide them. */
+/** Setters for what the adapter can't do are no-ops; capabilitiesOf() tells the UI to hide them. */
 export function useAudio(adapter: SoftwareAdapter | null): Audio {
   const [state, setState] = useState<AudioState | null>(null);
   const [levels, setLevels] = useState<Record<string, ChannelLevels>>({});
@@ -102,7 +99,6 @@ export function useAudio(adapter: SoftwareAdapter | null): Audio {
 
   return {
     adapter,
-    capabilities: capabilitiesOf(adapter ?? obsAdapter),
     state,
     levels,
     inputDb,

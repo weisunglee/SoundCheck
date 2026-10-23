@@ -1,5 +1,6 @@
 // Checks the SoundCheck plugin's Streamlabs build in a running Streamlabs Desktop: loading,
-// the control port and its token, the tap (48 kHz stereo, once per moment), and pausing the
+// the control port and its token, per-source level meters, the tap (48 kHz stereo, once per
+// moment), and pausing the
 // stream audio (heartbeat, resume, watchdog) without touching Streamlabs' own track settings.
 // Install soundcheck-streamlabs.dll into %APPDATA%\slobs-plugins\obs-plugins\64bit first; it is
 // loaded only if it isn't answering already. Pausing silences the stream for about 3 seconds,
@@ -14,6 +15,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function slobs() {
   const socket = net.connect("\\\\.\\pipe\\slobs");
+  socket.on("error", (e) => {
+    console.log(`Cannot reach Streamlabs (${e.message}). Is Streamlabs Desktop running?`);
+    process.exit(1);
+  });
   let buffer = "", nextId = 1; const pending = new Map(); const subs = new Map();
   socket.on("data", (c) => { buffer += c.toString(); let i; while ((i = buffer.indexOf("\n")) >= 0) { const m = JSON.parse(buffer.slice(0, i)); buffer = buffer.slice(i + 1); const p = pending.get(m.id); if (p) { pending.delete(m.id); m.error ? p.reject(new Error(m.error.message)) : p.resolve(m.result); } else if (m.result?._type === "EVENT") subs.get(m.result.resourceId)?.(m.result); } });
   const request = (resource, method, ...args) => new Promise((resolve, reject) => { const id = nextId++; pending.set(id, { resolve, reject }); socket.write(JSON.stringify({ jsonrpc: "2.0", id, method, params: { resource, args } }) + "\n"); setTimeout(() => reject(new Error("timeout")), 10000); });
@@ -52,6 +57,22 @@ const info = await control("GetInfo");
 check(info.ok === true, "GetInfo answers", JSON.stringify(info));
 const bad = await new Promise((resolve) => { const { port } = JSON.parse(fs.readFileSync(controlPath, "utf8")); const s = net.connect(port, "127.0.0.1", () => s.write(JSON.stringify({ token: "nope", requestType: "GetInfo" }) + "\n")); let b = ""; s.on("data", (c) => { b += c; if (b.includes("\n")) { s.end(); resolve(JSON.parse(b)); } }); });
 check(bad.ok === false && bad.error === "wrong token", "a wrong token is refused", JSON.stringify(bad));
+
+// Level meters: every Streamlabs audio source (libobs names them by sourceId) gets a reading.
+await control("GetSourceLevels");
+await wait(500);
+const meterAnswer = await control("GetSourceLevels");
+const readings = new Map((meterAnswer.inputs ?? []).map((i) => [i.name, i.levels]));
+const audioSources = await sl.request("AudioService", "getSources");
+const unmetered = audioSources.filter((a) => !readings.has(a.sourceId)).map((a) => a.name);
+check(meterAnswer.ok === true && unmetered.length === 0, "every audio source is metered", unmetered.length ? `missing: ${unmetered.join(", ")}` : `${readings.size} sources`);
+const values = [...readings.values()].flat().flatMap((c) => [c.magnitude, c.peak, c.inputPeak]);
+check(values.length > 0 && values.every((v) => typeof v === "number" && v >= 0 && v <= 4), "levels are 0..1 amplitudes", values.slice(0, 6).map((v) => v.toFixed(4)).join(" "));
+const loudest = audioSources.map((a) => ({ name: a.name, peak: Math.max(0, ...(readings.get(a.sourceId) ?? []).map((c) => c.peak)) })).sort((x, y) => y.peak - x.peak)[0];
+console.log(`info  loudest source in the last 0.5 s: ${loudest?.name} (${loudest ? (20 * Math.log10(loudest.peak || 1e-9)).toFixed(1) : "-"} dBFS)`);
+let fast = 0;
+for (let i = 0; i < 20; i++) if ((await control("GetSourceLevels")).ok) fast++;
+check(fast === 20, "20 reads in a row answer", String(fast));
 
 // Tap: start, read a second of audio, stop.
 const tap = await control("StartTap");

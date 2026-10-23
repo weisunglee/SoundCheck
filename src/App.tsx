@@ -13,6 +13,7 @@ import { StreamlabsPluginInstall } from "./components/StreamlabsPluginInstall";
 import { statusLabel } from "./components/StatusBadge";
 import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
+import { capabilitiesOf } from "./adapter";
 import { useAudio } from "./audio";
 import { useConnection } from "./connection";
 import { obsAdapter } from "./obsAdapter";
@@ -20,6 +21,7 @@ import { assessPlugin, createPlugin, pluginApplies, usePluginFiles, usePluginInf
 import { streamlabsAdapter } from "./streamlabsAdapter";
 import { SoundHold, type SourceWithStatus, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
+import type { SoftwareId } from "./software";
 import type { AudioSource } from "./types";
 import { LANGUAGES, type Lang, t, useLanguage } from "./i18n";
 
@@ -30,7 +32,9 @@ export default function App() {
   const { lang, setLang } = useLanguage();
   const [view, setView] = useState<View>("scene");
   const [soundTestOpen, setSoundTestOpen] = useState(false);
-  const [pluginOpen, setPluginOpen] = useState(false);
+  // The software the install dialog is for, fixed when it opens: it must not switch to OBS's
+  // steps when the user closes Streamlabs as the dialog asks.
+  const [pluginFor, setPluginFor] = useState<SoftwareId | null>(null);
   const [filtersFor, setFiltersFor] = useState<string | null>(null);
   const [addStart, setAddStart] = useState<AddSourceStart | null>(null);
   const [soundTestPlaying, setSoundTestPlaying] = useState(false);
@@ -48,17 +52,20 @@ export default function App() {
   const { state: connection, presence } = useConnection();
   const software = connection.kind === "connected" ? connection.software : null;
   const audio = useAudio(software === "obs" ? obsAdapter : software === "streamlabs" ? streamlabsAdapter : null);
-  const { adapter, state, levels, capabilities: caps } = audio;
+  const { adapter, state, levels } = audio;
   const plugin = useMemo(() => (adapter?.plugin ? createPlugin(adapter.plugin) : null), [adapter]);
   // Before connecting, the OBS installer applies (it doesn't need a connection).
   const pluginFiles = usePluginFiles(software ?? "obs", 5000);
   // Asked again when a new file is installed: Streamlabs can load it without a restart.
   const pluginInfo = usePluginInfo(state !== null ? plugin : null, pluginFiles?.installedVersion);
   const pluginLoaded = Boolean(pluginInfo);
+  // While nothing is connected, show what OBS (the fully supported one) offers.
+  const caps = capabilitiesOf(adapter ?? obsAdapter, pluginLoaded);
   const local = connection.kind === "connected" && connection.local;
   const streamTap = useStreamTap(local && pluginLoaded ? plugin : null);
   // The installer is for software on this computer only.
   const need = pluginFiles && pluginApplies(connection) ? assessPlugin(pluginFiles, pluginInfo?.pluginVersion ?? null, pluginInfo !== undefined).need : "none";
+  const openPluginDialog = () => setPluginFor(connection.kind === "connecting" ? "obs" : connection.software);
   const NEED_LABELS = { install: t("安裝外掛"), update: t("更新外掛 {version}", { version: pluginFiles?.bundledVersion ?? "" }), notLoaded: t("外掛沒有載入") } as const;
 
   const soundHold = useRef(new SoundHold()).current;
@@ -100,7 +107,7 @@ export default function App() {
         </>
       )}
       {need !== "none" && (
-        <button type="button" className="btn warn" onClick={() => setPluginOpen(true)}>
+        <button type="button" className="btn warn" onClick={() => openPluginDialog()}>
           {NEED_LABELS[need]}
         </button>
       )}
@@ -130,11 +137,14 @@ export default function App() {
 
   // Rendered right after the header in both layouts below, so React keeps the dialog (and an
   // install in progress) when the app switches between "not connected" and the mixer.
-  const pluginDialog = pluginOpen && (
-    software === "streamlabs" ? (
-      <StreamlabsPluginInstall loadedVersion={pluginInfo?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+  // What the dialog's software has loaded; nothing while the app is connected to the other one.
+  const dialogLoaded = software === pluginFor ? (pluginInfo?.pluginVersion ?? null) : null;
+  const pluginDialog =
+    pluginFor &&
+    (pluginFor === "streamlabs" ? (
+      <StreamlabsPluginInstall loadedVersion={dialogLoaded} onClose={() => setPluginFor(null)} />
     ) : (
-      <PluginInstall obsConnected={state !== null} loadedVersion={pluginInfo?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+      <PluginInstall obsConnected={software === "obs" && state !== null} loadedVersion={dialogLoaded} onClose={() => setPluginFor(null)} />
     )
   );
 
@@ -191,7 +201,7 @@ export default function App() {
         <div className="notice-bar">
           {t("直播軟體沒有載入 SoundCheck 外掛：試音無法使用，「沒送到直播」先假設直播用的是音軌 1。")}
           {need !== "none" && (
-            <button type="button" className="link" onClick={() => setPluginOpen(true)}>
+            <button type="button" className="link" onClick={() => openPluginDialog()}>
               {NEED_LABELS[need]}
             </button>
           )}
@@ -238,7 +248,7 @@ export default function App() {
                 pluginLoaded={pluginInfo !== null}
                 streamPaused={soundTestPlaying}
                 sources={sources}
-                onInstallPlugin={() => setPluginOpen(true)}
+                onInstallPlugin={() => openPluginDialog()}
               />
               )}
 
@@ -247,12 +257,6 @@ export default function App() {
                   <h4 className="section-title">{t("這個場景的聲音（淡色虛線框的觀眾聽不到）")}</h4>
                   <div className="mixer">{inScene.map(strip)}</div>
                 </section>
-              )}
-
-              {!caps.meters && (
-                <p className="hint notice-inline">
-                  {t("{app} 不提供來源音量表和左右平衡，所以這兩項在 {app} 上無法使用；直播音量表、試音和其他設定都可以正常使用。")}
-                </p>
               )}
 
               {local && adapter && <SystemSounds adapter={adapter} sources={sources} onAdd={setAddStart} />}

@@ -10,7 +10,8 @@ describe("capabilitiesOf", () => {
   it("gives OBS everything", () => {
     expect(Object.values(capabilitiesOf(obsAdapter)).every(Boolean)).toBe(true);
   });
-  it("gives Streamlabs everything but meters and balance", () => {
+  it("gives Streamlabs everything but balance, and meters only with the plugin", () => {
+    expect(capabilitiesOf(streamlabsAdapter, true).meters).toBe(true);
     expect(capabilitiesOf(streamlabsAdapter)).toEqual({
       meters: false,
       monitoringControl: true,
