@@ -130,6 +130,19 @@ npm run check:i18n    # every UI text translated in every language
 
 Building the plugin follows the obs-plugintemplate layout in `obs-plugin/` (for example `cmake --preset windows-x64`, and `-B build_x64_streamlabs -DSOUNDCHECK_STREAMLABS=ON` for the Streamlabs build). The Windows app bundles both DLLs (`src-tauri/tauri.windows.conf.json`).
 
+### Continuous integration and releases
+
+`.github/workflows/build.yml` runs on every pull request and push to `main`: type-check, unit tests and the translation check, then the Rust tests, the plugin and the app on Windows and macOS (universal). The installers are kept as artifacts of each run.
+
+To release, set the new version and push it to `main`:
+
+```sh
+npm run bump -- 0.3.0     # or patch / minor / major; updates every file that holds the version
+git commit -am "Release 0.3.0" && git push
+```
+
+A push that changes the version in `src-tauri/tauri.conf.json` to one without a tag builds both platforms into a draft release `v0.3.0` and publishes it once the checks pass and both installers are in it. The plugin has its own version, in `obs-plugin/buildspec.json`. Neither installer is code-signed yet: Windows SmartScreen warns about an unknown publisher, and macOS asks to open the app with right-click → Open the first time.
+
 ### Translations
 
 UI text is written in Traditional Chinese inside `t("…")`; the other languages are in `src/locales/`, keyed by the Chinese text (the gettext approach). After adding or changing text, run `npm run check:i18n`: it lists missing and unused translations and mismatched `{placeholders}`. Text stored as data and shown later is marked with `msg("…")` and translated when shown. UI text says "streaming software" in general and names the program (`{app}`) only in steps that point at its menus. Messages from the Rust side are in `src-tauri/src/i18n.rs`.
