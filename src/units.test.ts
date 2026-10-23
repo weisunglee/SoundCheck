@@ -2,7 +2,7 @@
 // system audio maps onto captures in the streaming software.
 import { describe, expect, it } from "vitest";
 import { loudnessVerdict } from "./loudnessVerdict";
-import { compareVersions } from "./pluginStatus";
+import { type PluginFiles, assessPlugin, compareVersions, pluginApplies } from "./plugin";
 import { iecDbToDeflection } from "./streamlabs";
 import { type SystemApp, type SystemDevice, appCoverage, deviceCoverage, obsWindowString } from "./systemAudio";
 
@@ -12,6 +12,44 @@ describe("compareVersions", () => {
     expect(compareVersions("0.2.1", "0.2.1")).toBe(0);
     expect(compareVersions("0.2", "0.2.0")).toBe(0);
     expect(compareVersions("0.2.0", "0.3.0")).toBeLessThan(0);
+  });
+});
+
+describe("assessPlugin", () => {
+  const files = (patch: Partial<PluginFiles> = {}): PluginFiles => ({
+    bundledVersion: "0.3.0",
+    installed: true,
+    installedVersion: "0.3.0",
+    legacyInstalled: false,
+    obsRunning: true,
+    enabledInPluginManager: true,
+    ...patch,
+  });
+
+  it("trusts the version OBS has loaded over the file on disk", () => {
+    expect(assessPlugin(files({ installedVersion: "0.1.0" }), "0.3.0", true)).toEqual({ need: "none", fileCurrent: false, loadedCurrent: true });
+    expect(assessPlugin(files(), "0.2.1", true).need).toBe("update");
+  });
+  it("asks to install when nothing is on disk, and to update an older file", () => {
+    expect(assessPlugin(files({ installed: false, installedVersion: null }), null, false).need).toBe("install");
+    expect(assessPlugin(files({ installedVersion: "0.2.1" }), null, false).need).toBe("update");
+  });
+  it("reports a current file that OBS hasn't loaded only while connected", () => {
+    expect(assessPlugin(files(), null, true).need).toBe("notLoaded");
+    expect(assessPlugin(files(), null, false).need).toBe("none");
+  });
+  it("needs nothing when the app bundles no plugin", () => {
+    expect(assessPlugin(files({ bundledVersion: null, installed: false }), null, true).need).toBe("none");
+  });
+});
+
+describe("pluginApplies", () => {
+  it("applies to OBS on this computer and to connections not made yet", () => {
+    expect(pluginApplies({ kind: "connected", software: "obs", version: "32", local: true })).toBe(true);
+    expect(pluginApplies({ kind: "connected", software: "obs", version: "32", local: false })).toBe(false);
+    expect(pluginApplies({ kind: "connected", software: "streamlabs", version: "", local: true })).toBe(false);
+    expect(pluginApplies({ kind: "connecting" })).toBe(true);
+    expect(pluginApplies({ kind: "failed", software: "streamlabs", reason: "streamlabsNotRunning", message: "", manual: false })).toBe(false);
   });
 });
 

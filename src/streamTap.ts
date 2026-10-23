@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import { pluginRequest } from "./obs";
+import { plugin } from "./plugin";
 
 export interface StreamLevel {
   /** Peak per channel since the last update, 0..1. */
@@ -33,7 +33,7 @@ export function useStreamTap(enabled: boolean): { level: StreamLevel | null; run
       clearTimeout(timer);
       starting = true;
       try {
-        const { port, track } = await pluginRequest<{ port: number; track: number }>("StartTap");
+        const { port, track } = await plugin.startTap();
         if (!alive) return;
         await invoke("stream_tap_start", { port });
         // Cleanup may have run while the start was in flight; don't leave a reader behind.
@@ -53,8 +53,7 @@ export function useStreamTap(enabled: boolean): { level: StreamLevel | null; run
     const trackCheck = setInterval(async () => {
       if (tappedTrack === null) return;
       try {
-        const info = await pluginRequest<{ streamTracks: { track: number }[] }>("GetInfo");
-        const now = info.streamTracks[0]?.track;
+        const now = (await plugin.info()).streamTracks[0];
         if (alive && now !== undefined && now !== tappedTrack) {
           tappedTrack = null;
           start();
@@ -82,7 +81,7 @@ export function useStreamTap(enabled: boolean): { level: StreamLevel | null; run
       offLevel.then((off) => off());
       offEnded.then((off) => off());
       invoke("stream_tap_stop").catch(() => {});
-      pluginRequest("StopTap").catch(() => {});
+      plugin.stopTap().catch(() => {});
       setRunning(false);
       setLevel(null);
     };

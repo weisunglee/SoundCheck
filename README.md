@@ -115,7 +115,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 #### 一鍵安裝
 
-外掛的二進位檔打包在本工具裡，不另外下載（Windows 由 `src-tauri/tauri.windows.conf.json` 把建置好的 DLL 放進 App 資源）。只有 App 附的版本比 OBS 載入的（或已安裝檔案的）版本新時，才會提示安裝或更新；版本號以 `obs-plugin/buildspec.json` 為準。安裝流程：
+外掛的請求協定、版本比較和「要不要安裝／更新」的判斷都在 `src/plugin.ts`（`plugin`、`assessPlugin`、`pluginApplies`），有單元測試。外掛的二進位檔打包在本工具裡，不另外下載（Windows 由 `src-tauri/tauri.windows.conf.json` 把建置好的 DLL 放進 App 資源）。只有 App 附的版本比 OBS 載入的（或已安裝檔案的）版本新時，才會提示安裝或更新；版本號以 `obs-plugin/buildspec.json` 為準。安裝流程：
 
 1. 偵測 OBS 版本和外掛資料夾
 2. OBS 正在執行時，請使用者關閉 OBS（Windows 上已載入的 DLL 無法覆寫，而且外掛要重開 OBS 才會載入）

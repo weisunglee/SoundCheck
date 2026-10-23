@@ -266,26 +266,3 @@ export function useConnection(): { state: ConnectionState; presence: SoftwarePre
 
   return { state, presence };
 }
-
-/** Calls one of the SoundCheck plugin's requests. */
-export async function pluginRequest<T = Record<string, unknown>>(
-  requestType: string,
-  requestData: { [key: string]: string | number | boolean } = {},
-): Promise<T> {
-  try {
-    const { responseData } = await obs.call("CallVendorRequest", {
-      vendorName: "soundcheck",
-      requestType,
-      requestData,
-    });
-    const data = responseData as { ok?: boolean; error?: string };
-    if (data.ok === false) throw new Error(data.error ?? t("外掛回報失敗"));
-    return data as T;
-  } catch (e) {
-    // obs-websocket answers 600 "No vendor was found by that name." when the plugin isn't loaded.
-    if (e instanceof OBSWebSocketError && e.code === 600 && /vendor/i.test(e.message)) {
-      throw new Error(t("直播軟體裡沒有安裝 SoundCheck 外掛，試音需要它。"));
-    }
-    throw e;
-  }
-}

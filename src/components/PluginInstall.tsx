@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { obs } from "../obs";
-import { compareVersions, usePluginStatus } from "../pluginStatus";
+import { assessPlugin, usePluginFiles } from "../plugin";
 import { t } from "../i18n";
 
 interface InstallError {
@@ -51,16 +51,15 @@ function useOutputsActive(enabled: boolean) {
 }
 
 export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
-  const status = usePluginStatus(1000);
+  const status = usePluginFiles(1000);
   const [install, setInstall] = useState<InstallState>({ kind: "idle" });
   const [launching, setLaunching] = useState<string | null>(null);
   const outputs = useOutputsActive(obsConnected);
   const lastLogged = useRef("");
 
   const bundled = status?.bundledVersion ?? null;
-  const fileCurrent = Boolean(bundled && status?.installedVersion && compareVersions(status.installedVersion, bundled) >= 0);
+  const { fileCurrent, loadedCurrent } = status ? assessPlugin(status, loadedVersion, obsConnected) : { fileCurrent: false, loadedCurrent: false };
   const installed = install.kind === "done" || fileCurrent;
-  const loadedCurrent = Boolean(bundled && loadedVersion && compareVersions(loadedVersion, bundled) >= 0);
   const finished = installed && loadedCurrent;
 
   const closeStep: StepState = installed || !status?.obsRunning ? "done" : "active";

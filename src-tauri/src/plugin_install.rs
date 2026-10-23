@@ -188,11 +188,19 @@ fn copy_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
     }
 }
 
+/// Compares dotted versions by number, so "0.3" and "0.3.0" match (the Windows version
+/// resource always reads back as major.minor.patch). Same rule as `compareVersions` in the UI.
+fn same_version(a: &str, b: &str) -> bool {
+    let parts = |v: &str| v.split('.').map(|p| p.trim().parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
+    let (pa, pb) = (parts(a), parts(b));
+    (0..pa.len().max(pb.len())).all(|i| pa.get(i).unwrap_or(&0) == pb.get(i).unwrap_or(&0))
+}
+
 fn check_installed(app: &AppHandle, target: &Path) -> Result<(), InstallError> {
     let found = file_version(target);
     log(app, format!("check: {} exists={} version={found:?} expected={BUNDLED_VERSION}", target.display(), target.exists()));
     match found {
-        Some(v) if v != BUNDLED_VERSION => Err(InstallError::new(
+        Some(v) if !same_version(&v, BUNDLED_VERSION) => Err(InstallError::new(
             "failed",
             trf("安裝後的外掛版本是 {found}，不是預期的 {expected}。", &[("found", &v), ("expected", &BUNDLED_VERSION)]),
         )),
@@ -394,4 +402,18 @@ fn windows_obs_install_dir() -> Option<PathBuf> {
     let line = text.lines().find(|l| l.contains("REG_SZ"))?;
     let value = line.split("REG_SZ").nth(1)?.trim();
     (!value.is_empty()).then(|| PathBuf::from(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::same_version;
+
+    #[test]
+    fn versions_compare_by_number() {
+        assert!(same_version("0.3.0", "0.3.0"));
+        assert!(same_version("0.3", "0.3.0"));
+        assert!(same_version("1.02.0", "1.2"));
+        assert!(!same_version("0.3.1", "0.3.0"));
+        assert!(!same_version("0.10.0", "0.1.0"));
+    }
 }

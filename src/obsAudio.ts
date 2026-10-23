@@ -1,7 +1,8 @@
 // Live audio-related OBS state: audio sources, scenes, and meters, kept in sync through events.
 import type { RequestBatchRequest } from "obs-websocket-js";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { obs, pluginRequest } from "./obs";
+import { obs } from "./obs";
+import { plugin } from "./plugin";
 import { CAPABILITIES, type Capabilities } from "./software";
 import { CAPTURE_KIND_SET } from "./systemAudio";
 import type { AudioSource, ChannelLevels, Filter, MonitorType, Scene, SceneItem } from "./types";
@@ -175,8 +176,8 @@ export async function loadState(): Promise<ObsAudioState> {
   let pluginAvailable = false;
   let pluginVersion: string | null = null;
   try {
-    const info = await pluginRequest<{ streamTracks: { track: number }[]; pluginVersion: string }>("GetInfo");
-    streamTracks = info.streamTracks.map((t) => t.track);
+    const info = await plugin.info();
+    streamTracks = info.streamTracks;
     pluginAvailable = true;
     pluginVersion = info.pluginVersion;
   } catch {

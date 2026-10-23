@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { loudnessVerdict } from "../loudnessVerdict";
-import { pluginRequest } from "../obs";
+import { plugin } from "../plugin";
 import { t } from "../i18n";
 
 interface Summary {
@@ -70,8 +70,8 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
     onPlayingChange(true);
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
-      await pluginRequest("PauseStreamAudio", { timeoutMs: PAUSE_TIMEOUT_MS });
-      heartbeat = setInterval(() => pluginRequest("Heartbeat").catch(() => {}), HEARTBEAT_MS);
+      await plugin.pauseStreamAudio(PAUSE_TIMEOUT_MS);
+      heartbeat = setInterval(() => plugin.heartbeat().catch(() => {}), HEARTBEAT_MS);
       await invoke("sound_test_play");
       setPhase({ kind: "recorded", summary });
     } catch (e) {
@@ -80,7 +80,7 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
       clearInterval(heartbeat);
       playingRef.current = false;
       onPlayingChange(false);
-      await pluginRequest("ResumeStreamAudio").catch(() => {});
+      await plugin.resumeStreamAudio().catch(() => {});
     }
   };
 

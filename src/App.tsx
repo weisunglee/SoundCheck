@@ -15,7 +15,7 @@ import { SystemSounds } from "./components/SystemSounds";
 import { useConnection } from "./obs";
 import { useObsAudio } from "./obsAudio";
 import { useStreamlabsAudio } from "./streamlabsAudio";
-import { pluginNeed, usePluginStatus } from "./pluginStatus";
+import { assessPlugin, pluginApplies, usePluginFiles } from "./plugin";
 import { itemsToShow, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
 import type { AudioSource } from "./types";
@@ -56,13 +56,12 @@ export default function App() {
   const audio = software === "streamlabs" ? streamlabsAudio : obsAudio;
   const caps = audio.capabilities;
   const { state, levels } = audio;
-  const pluginStatus = usePluginStatus(5000);
+  const pluginFiles = usePluginFiles(5000);
   const local = connection.kind === "connected" && connection.local;
   const streamTap = useStreamTap(local && caps.plugin && (state?.pluginAvailable ?? false));
   // The installer is for this computer's OBS only.
-  const pluginRelevant = software === "obs" ? local : connection.kind !== "connected" && (connection.kind !== "failed" || connection.software === "obs");
-  const need = pluginStatus && pluginRelevant ? pluginNeed(pluginStatus, state?.pluginVersion ?? null, state !== null) : "none";
-  const NEED_LABELS = { install: t("安裝外掛"), update: t("更新外掛 {version}", { version: pluginStatus?.bundledVersion ?? "" }), notLoaded: t("外掛沒有載入") } as const;
+  const need = pluginFiles && pluginApplies(connection) ? assessPlugin(pluginFiles, state?.pluginVersion ?? null, state !== null).need : "none";
+  const NEED_LABELS = { install: t("安裝外掛"), update: t("更新外掛 {version}", { version: pluginFiles?.bundledVersion ?? "" }), notLoaded: t("外掛沒有載入") } as const;
 
   const lastSound = useRef<Record<string, number>>({});
   const now = performance.now();
