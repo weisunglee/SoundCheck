@@ -1,4 +1,7 @@
-import type { AudioSource, Scene, SceneItem, SourceStatus } from "./types";
+// Whether viewers can hear each audio source (CONTEXT.md: source status), and how the mixer
+// groups the sources of the program scene by it.
+import type { AudioState } from "./adapter";
+import type { AudioSource, ChannelLevels, Scene, SceneItem, SourceStatus } from "./types";
 
 type Presence = "absent" | "hidden" | "visible";
 
@@ -75,4 +78,66 @@ export function itemsToShow(sceneName: string, sourceName: string, scenes: Scene
 
   walk(sceneName, [], new Set());
   return [...found.values()];
+}
+
+/** A meter position above this (about -57 dBFS) counts as "making sound". */
+const SOUND_THRESHOLD = 0.05;
+/** Keep counting a source as making sound this long after its last loud moment, so pauses in speech don't flicker. */
+const SOUND_HOLD_MS = 1500;
+
+/** Remembers when each source last made sound. */
+export class SoundHold {
+  private last = new Map<string, number>();
+
+  /**
+   * Records `levels` measured at `now` (ms) and returns whether a source counts as making sound.
+   * Without meters silence can't be told apart, so every source does.
+   */
+  observe(levels: Record<string, ChannelLevels>, meters: boolean, now: number): (name: string) => boolean {
+    for (const [name, [l, r]] of Object.entries(levels)) {
+      if (Math.max(l, r) > SOUND_THRESHOLD) this.last.set(name, now);
+    }
+    return (name) => !meters || now - (this.last.get(name) ?? -Infinity) < SOUND_HOLD_MS;
+  }
+}
+
+export interface SourceWithStatus {
+  source: AudioSource;
+  status: SourceStatus;
+}
+
+export interface ProgramAudibility {
+  /**
+   * The program scene's sources in a fixed order (global devices first, then the software's own
+   * order), so a card never moves when its status changes and a mute can be undone in place.
+   */
+  inScene: SourceWithStatus[];
+  /** In `inScene` and heard by viewers. */
+  heard: SourceWithStatus[];
+  /** Heard, but no sound is coming in right now. */
+  silent: SourceWithStatus[];
+  /** In the scene, but viewers can't hear them. */
+  notHeard: SourceWithStatus[];
+  /** Not in the program scene at all. */
+  elsewhere: SourceWithStatus[];
+  /** How many sources viewers would hear in each switchable scene. */
+  heardCount: Record<string, number>;
+}
+
+export function programAudibility(state: AudioState, sounding: (name: string) => boolean): ProgramAudibility {
+  const { sources, scenes, sceneOrder, programScene, streamTracks } = state;
+  const withStatus = sources.map((source) => ({ source, status: sourceStatus(source, programScene, scenes, streamTracks) }));
+  const present = withStatus.filter((x) => x.status !== "notInScene");
+  const inScene = [...present.filter((x) => x.source.global), ...present.filter((x) => !x.source.global)];
+  const heard = inScene.filter((x) => x.status === "live");
+  return {
+    inScene,
+    heard,
+    silent: heard.filter((x) => !sounding(x.source.name)),
+    notHeard: inScene.filter((x) => x.status !== "live"),
+    elsewhere: withStatus.filter((x) => x.status === "notInScene"),
+    heardCount: Object.fromEntries(
+      sceneOrder.map((scene) => [scene, sources.filter((s) => sourceStatus(s, scene, scenes, streamTracks) === "live").length]),
+    ),
+  };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { itemsToShow, presenceInScene, scenesContaining, sourceStatus } from "./status";
+import { SoundHold, itemsToShow, presenceInScene, programAudibility, scenesContaining, sourceStatus } from "./status";
 import type { AudioSource, Scene } from "./types";
 
 const source = (name: string, patch: Partial<AudioSource> = {}): AudioSource => ({
@@ -89,5 +89,55 @@ describe("itemsToShow", () => {
   });
   it("returns nothing when the source is already visible", () => {
     expect(itemsToShow("Game", "Mic", scenes)).toEqual([]);
+  });
+});
+
+describe("programAudibility", () => {
+  const state = {
+    scenes,
+    sceneOrder: ["Game", "Chat"],
+    programScene: "Game",
+    streamTracks: [1],
+    sources: [
+      source("Mic", { muted: true }),
+      source("Alerts"),
+      source("Desktop", { global: true }),
+      source("Music"),
+    ],
+  };
+  const names = (list: { source: { name: string } }[]) => list.map((x) => x.source.name);
+
+  it("lists global devices first and otherwise keeps the software's order", () => {
+    expect(names(programAudibility(state, () => true).inScene)).toEqual(["Desktop", "Mic", "Alerts"]);
+  });
+  it("keeps a muted card in its place", () => {
+    const unmuted = { ...state, sources: state.sources.map((s) => ({ ...s, muted: false })) };
+    expect(names(programAudibility(unmuted, () => true).inScene)).toEqual(names(programAudibility(state, () => true).inScene));
+  });
+  it("splits heard, silent, not heard and elsewhere", () => {
+    const a = programAudibility(state, (name) => name !== "Alerts");
+    expect(names(a.heard)).toEqual(["Desktop", "Alerts"]);
+    expect(names(a.silent)).toEqual(["Alerts"]);
+    expect(names(a.notHeard)).toEqual(["Mic"]);
+    expect(names(a.elsewhere)).toEqual(["Music"]);
+  });
+  it("counts what viewers would hear in each scene", () => {
+    // Chat: Desktop is global; Music is hidden there.
+    expect(programAudibility(state, () => true).heardCount).toEqual({ Game: 2, Chat: 1 });
+  });
+});
+
+describe("SoundHold", () => {
+  it("counts a source as sounding for a moment after its last loud level", () => {
+    const hold = new SoundHold();
+    expect(hold.observe({ Mic: [0.5, 0.2] }, true, 1000)("Mic")).toBe(true);
+    expect(hold.observe({ Mic: [0, 0] }, true, 2000)("Mic")).toBe(true);
+    expect(hold.observe({ Mic: [0, 0] }, true, 2600)("Mic")).toBe(false);
+  });
+  it("ignores levels under the threshold", () => {
+    expect(new SoundHold().observe({ Mic: [0.04, 0.04] }, true, 0)("Mic")).toBe(false);
+  });
+  it("never calls a source silent without meters", () => {
+    expect(new SoundHold().observe({}, false, 0)("Mic")).toBe(true);
   });
 });

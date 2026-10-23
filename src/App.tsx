@@ -17,15 +17,10 @@ import { useConnection } from "./connection";
 import { obsAdapter } from "./obsAdapter";
 import { assessPlugin, pluginApplies, usePluginFiles, usePluginInfo } from "./plugin";
 import { streamlabsAdapter } from "./streamlabsAdapter";
-import { itemsToShow, scenesContaining, sourceStatus } from "./status";
+import { SoundHold, type SourceWithStatus, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
 import type { AudioSource } from "./types";
 import { LANGUAGES, type Lang, t, useLanguage } from "./i18n";
-
-/** A meter position above this (about -57 dBFS) counts as "making sound". */
-const SOUND_THRESHOLD = 0.05;
-/** Keep showing "making sound" this long after the last loud moment, so pauses in speech don't flicker. */
-const SOUND_HOLD_MS = 1500;
 
 type View = "scene" | "table";
 
@@ -62,13 +57,8 @@ export default function App() {
   const need = pluginFiles && pluginApplies(connection) ? assessPlugin(pluginFiles, pluginInfo?.pluginVersion ?? null, pluginInfo !== undefined).need : "none";
   const NEED_LABELS = { install: t("安裝外掛"), update: t("更新外掛 {version}", { version: pluginFiles?.bundledVersion ?? "" }), notLoaded: t("外掛沒有載入") } as const;
 
-  const lastSound = useRef<Record<string, number>>({});
-  const now = performance.now();
-  for (const [name, [l, r]] of Object.entries(levels)) {
-    if (Math.max(l, r) > SOUND_THRESHOLD) lastSound.current[name] = now;
-  }
-  // Without meters there's no way to tell silence, so never claim a source is silent.
-  const sounding = (name: string) => !caps.meters || now - (lastSound.current[name] ?? -Infinity) < SOUND_HOLD_MS;
+  const soundHold = useRef(new SoundHold()).current;
+  const sounding = soundHold.observe(levels, caps.meters, performance.now());
 
   const header = (
     <header className="bar">
@@ -159,21 +149,9 @@ export default function App() {
   const { sources, scenes, sceneOrder, programScene, streamTracks } = state;
   const statusIn = (s: AudioSource, scene: string) => sourceStatus(s, scene, scenes, streamTracks);
 
-  const withStatus = sources.map((s) => ({ source: s, status: statusIn(s, programScene) }));
-  // One list in a fixed order (global devices first, then the software's own order), so a card never
-  // moves when its status changes and muting can be undone with a second click in the same spot.
-  const inScene = [
-    ...withStatus.filter((x) => x.status !== "notInScene" && x.source.global),
-    ...withStatus.filter((x) => x.status !== "notInScene" && !x.source.global),
-  ];
-  const heard = inScene.filter((x) => x.status === "live");
-  const silent = heard.filter((x) => !sounding(x.source.name));
-  const notHeard = inScene.filter((x) => x.status !== "live");
-  const elsewhere = withStatus.filter((x) => x.status === "notInScene");
+  const { inScene, heard, silent, notHeard, elsewhere, heardCount } = programAudibility(state, sounding);
 
-  const heardCount = Object.fromEntries(sceneOrder.map((sc) => [sc, sources.filter((s) => statusIn(s, sc) === "live").length]));
-
-  const strip = ({ source, status }: (typeof withStatus)[number]) => (
+  const strip = ({ source, status }: SourceWithStatus) => (
     <ChannelStrip
       key={source.name}
       id={stripId(source.name)}
