@@ -10,6 +10,7 @@
 #include <vector>
 
 struct audio_data;
+struct audio_resampler;
 
 #ifdef _WIN32
 using socket_handle = uintptr_t;
@@ -21,7 +22,11 @@ using socket_handle = int;
  * Copies one OBS audio track's mix to a single local TCP client as raw
  * interleaved 32-bit float stereo PCM at 48 kHz.
  *
- * The tap only reads the mix; it never feeds audio back into OBS.
+ * The tap only reads the mix; it never feeds audio back into OBS. It takes the
+ * mix as libobs makes it and converts it itself, because Streamlabs' libobs
+ * delivers each mix once per canvas (horizontal and vertical output): a shared
+ * libobs converter would be fed both, so the tap keeps only the first block of
+ * each moment, which is the main canvas.
  */
 class Tap {
 public:
@@ -49,6 +54,9 @@ private:
     std::thread thread_;
     std::atomic<bool> stopping_{false};
     std::atomic<bool> client_connected_{false};
+    audio_resampler *resampler_ = nullptr;
+    /** Timestamp of the last block taken, to drop the other canvases' copies. */
+    uint64_t last_timestamp_ = 0;
     bool running_ = false;
     int track_ = 0;
     socket_handle listener_;

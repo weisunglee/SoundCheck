@@ -11,19 +11,29 @@ include(compilerconfig)
 include(defaults)
 include(helpers)
 
+# ON builds the Streamlabs Desktop variant (soundcheck-streamlabs): no obs-websocket or frontend
+# API, and a control port of its own instead (see src/plugin-streamlabs.cpp).
+option(SOUNDCHECK_STREAMLABS "Build for Streamlabs Desktop" OFF)
+
 find_package(libobs REQUIRED)
-find_package(obs-frontend-api REQUIRED)
 
 add_library(${CMAKE_PROJECT_NAME} MODULE
-  src/plugin-main.cpp
+  src/requests.cpp
   src/stream-pause.cpp
-  src/stream-tracks.cpp
   src/tap.cpp
 )
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   OBS::libobs
-  OBS::obs-frontend-api
   $<$<PLATFORM_ID:Windows>:ws2_32>
 )
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PLUGIN_VERSION="${PLUGIN_VERSION}")
-set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+
+if(SOUNDCHECK_STREAMLABS)
+  target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-streamlabs.cpp src/stream-outputs.cpp)
+  set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name}-streamlabs)
+else()
+  find_package(obs-frontend-api REQUIRED)
+  target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-obs.cpp src/stream-tracks.cpp)
+  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::obs-frontend-api)
+  set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+endif()

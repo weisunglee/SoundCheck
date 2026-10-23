@@ -1,5 +1,6 @@
 #include "tap.hpp"
 
+#include <media-io/audio-resampler.h>
 #include <obs-module.h>
 
 #ifdef _WIN32
@@ -19,6 +20,16 @@ static void close_socket(socket_handle s) { close(s); }
 
 /** About two seconds of audio; older blocks are dropped if the client falls behind. */
 static constexpr size_t kMaxQueuedBlocks = 100;
+
+/**
+ * The `param` libobs passes back to the audio callback. Streamlabs' libobs reads every audio
+ * callback's param as an obs_encoder to find its canvas, and skips it when `encoder->video` is
+ * set; a zeroed block reads as an encoder without video, so it is neither skipped nor a crash.
+ * Large enough to cover the fields it reads. Upstream libobs never looks inside.
+ */
+alignas(64) static unsigned char g_callback_param[64 * 1024];
+/** The tap the callback belongs to; there is only ever one. */
+static Tap *g_active_tap = nullptr;
 
 bool tap_sockets_init()
 {
@@ -60,18 +71,26 @@ uint16_t Tap::start(int track)
         return 0;
     }
 
+    const audio_output_info *native = audio_output_get_info(obs_get_audio());
+    resample_info from{native->samples_per_sec, native->format, native->speakers};
+    resample_info to{kSampleRate, AUDIO_FORMAT_FLOAT, SPEAKERS_STEREO};
+    resampler_ = audio_resampler_create(&to, &from);
+    if (!resampler_) {
+        close_socket(listener);
+        return 0;
+    }
+
     listener_ = listener;
     client_ = kNoSocket;
     track_ = track;
+    last_timestamp_ = 0;
     stopping_ = false;
     client_connected_ = false;
     running_ = true;
 
-    audio_convert_info conversion{};
-    conversion.samples_per_sec = kSampleRate;
-    conversion.format = AUDIO_FORMAT_FLOAT;
-    conversion.speakers = SPEAKERS_STEREO;
-    obs_add_raw_audio_callback(size_t(track - 1), &conversion, &Tap::on_audio, this);
+    // No conversion: the mix arrives as libobs makes it, and resampler_ converts it.
+    g_active_tap = this;
+    obs_add_raw_audio_callback(size_t(track - 1), nullptr, &Tap::on_audio, g_callback_param);
 
     thread_ = std::thread(&Tap::serve, this);
 
@@ -85,7 +104,11 @@ void Tap::stop()
     if (!running_)
         return;
 
-    obs_remove_raw_audio_callback(size_t(track_ - 1), &Tap::on_audio, this);
+    // Once this returns, libobs makes no more calls to on_audio.
+    obs_remove_raw_audio_callback(size_t(track_ - 1), &Tap::on_audio, g_callback_param);
+    g_active_tap = nullptr;
+    audio_resampler_destroy(resampler_);
+    resampler_ = nullptr;
 
     stopping_ = true;
     close_socket(listener_);
@@ -101,14 +124,25 @@ void Tap::stop()
     blog(LOG_INFO, "[soundcheck] tap stopped");
 }
 
-void Tap::on_audio(void *param, size_t, audio_data *data)
+void Tap::on_audio(void *, size_t, audio_data *data)
 {
-    auto *self = static_cast<Tap *>(param);
-    if (!self->client_connected_ || !data->data[0])
+    Tap *self = g_active_tap;
+    // Streamlabs sends the same moment once per canvas; the first one is the main canvas.
+    if (!self || (self->last_timestamp_ != 0 && data->timestamp <= self->last_timestamp_))
+        return;
+    self->last_timestamp_ = data->timestamp;
+    if (!data->data[0])
         return;
 
-    const float *samples = reinterpret_cast<const float *>(data->data[0]);
-    std::vector<float> block(samples, samples + size_t(data->frames) * kChannels);
+    uint8_t *converted[MAX_AV_PLANES] = {};
+    uint32_t frames = 0;
+    uint64_t offset = 0;
+    if (!audio_resampler_resample(self->resampler_, converted, &frames, &offset, data->data, data->frames) ||
+        !converted[0] || !self->client_connected_)
+        return;
+
+    const float *samples = reinterpret_cast<const float *>(converted[0]);
+    std::vector<float> block(samples, samples + size_t(frames) * kChannels);
 
     {
         std::lock_guard lock(self->mutex_);
