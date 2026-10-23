@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
+import { meterPosition } from "../levels";
 import { loudnessVerdict } from "../loudnessVerdict";
+import { meterFill } from "./LevelMeter";
 import type { Plugin } from "../plugin";
 import { t } from "../i18n";
 import { Icon, IconButton } from "./Icon";
@@ -134,7 +136,7 @@ export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
             <div className="hmeters">
               {phase.peaks.map((p, i) => (
                 <div key={i} className="hmeter">
-                  <b style={{ width: `${Math.min(1, p) * 100}%` }} />
+                  <b style={meterFill(meterPosition(p), "horizontal")} />
                 </div>
               ))}
             </div>
