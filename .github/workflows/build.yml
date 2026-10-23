@@ -1,27 +1,45 @@
-# Builds SoundCheck for Windows and macOS, with the plugin bundled, and publishes a release.
+# Checks and builds SoundCheck for Windows and macOS, with the plugin bundled, on every pull
+# request and every push to main, and publishes a release when the version changes.
 #
-# - Push to main with a new version in src-tauri/tauri.conf.json: builds both platforms into a
-#   draft release v<version>, then publishes it once both succeed. A version that already has a
-#   tag is not built again.
-# - Run manually (Actions → Release → Run workflow): builds both platforms and keeps the
-#   installers as workflow artifacts, without a release.
-name: Release
+# - Pull request, push to main, or a manual run (Actions → Build → Run workflow): runs the
+#   checks and tests, builds both platforms, and keeps the installers as workflow artifacts.
+# - Push to main with a new version in src-tauri/tauri.conf.json (one without a v<version> tag
+#   yet): the builds go into a draft release v<version> instead, which is published once both
+#   platforms are in it.
+name: Build
 
 on:
+  pull_request:
   push:
     branches: [main]
-    paths:
-      - src-tauri/tauri.conf.json
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: build-${{ github.ref }}
+  # A newer push to a pull request replaces its checks; runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit -p .
+      - name: Unit tests
+        run: npm test
+      - name: Every UI text translated
+        run: npm run check:i18n
+
   version:
     name: Check version
     runs-on: ubuntu-latest
@@ -39,10 +57,10 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_EVENT_NAME" != "push" ]; then
             echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "Manual run: building v$version without a release."
+            echo "$GITHUB_EVENT_NAME: building v$version without a release."
           elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
             echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::v$version is already released; nothing to build."
+            echo "v$version is already released: building without a release."
           else
             echo "release=true" >> "$GITHUB_OUTPUT"
             echo "Releasing v$version."
@@ -51,7 +69,6 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     needs: version
-    if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -115,6 +132,12 @@ jobs:
 
       - run: npm ci
 
+      # The Rust crate embeds the built frontend, so build that first.
+      - name: Rust tests
+        run: |
+          npm run build
+          cargo test --lib --manifest-path src-tauri/Cargo.toml
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -130,7 +153,7 @@ jobs:
           releaseDraft: true
           prerelease: false
 
-      - name: Keep the installers (manual runs)
+      - name: Keep the installers (no release)
         if: needs.version.outputs.release != 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -143,7 +166,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [version, build]
+    needs: [checks, version, build]
     if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
