@@ -3,9 +3,10 @@
 // its local API (see streamlabs.ts).
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import OBSWebSocket, { EventSubscription, OBSWebSocketError } from "obs-websocket-js";
+import { EventSubscription, OBSWebSocketError } from "obs-websocket-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setSoftwareName, t } from "./i18n";
+import { obs } from "./obsClient";
 import { SOFTWARE_NAMES, type SoftwareId, loadSoftwareChoice } from "./software";
 import { streamlabs } from "./streamlabs";
 
@@ -14,8 +15,6 @@ interface WebsocketConfig {
   port: number;
   password: string | null;
 }
-
-export const obs = new OBSWebSocket();
 
 /** Why a connection attempt failed, so the UI can show the matching guide. */
 export type ConnectFailure =

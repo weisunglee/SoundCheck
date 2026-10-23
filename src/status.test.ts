@@ -10,7 +10,7 @@ const source = (name: string, patch: Partial<AudioSource> = {}): AudioSource => 
   muted: false,
   balance: 0.5,
   syncOffsetMs: 0,
-  monitorType: "OBS_MONITORING_TYPE_NONE",
+  monitorType: "off",
   filters: [],
   tracks: [1],
   global: false,
@@ -62,8 +62,8 @@ describe("sourceStatus", () => {
     expect(status(source("Nowhere", { muted: true }))).toBe("notInScene");
   });
   it("reports mute, monitor-only and off-stream in that order", () => {
-    expect(status(source("Mic", { muted: true, monitorType: "OBS_MONITORING_TYPE_MONITOR_ONLY" }))).toBe("muted");
-    expect(status(source("Mic", { monitorType: "OBS_MONITORING_TYPE_MONITOR_ONLY", tracks: [2] }))).toBe("monitorOnly");
+    expect(status(source("Mic", { muted: true, monitorType: "monitorOnly" }))).toBe("muted");
+    expect(status(source("Mic", { monitorType: "monitorOnly", tracks: [2] }))).toBe("monitorOnly");
     expect(status(source("Mic", { tracks: [2] }))).toBe("offStream");
   });
   it("counts global devices as present in every scene", () => {

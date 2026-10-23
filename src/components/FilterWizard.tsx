@@ -1,21 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  FILTERS,
-  PROBLEMS,
-  type SourceFilter,
-  addFilter,
-  loadFilters,
-  moveFilter,
-  removeFilter,
-  setFilterEnabled,
-  updateFilterSettings,
-} from "../filters";
-import { obs } from "../obs";
+import type { FilterOps, SourceFilter } from "../adapter";
+import { FILTERS, PROBLEMS, addFilter } from "../filters";
 import { t } from "../i18n";
 
 type Settings = Record<string, string | number | boolean>;
 
 interface Props {
+  ops: FilterOps;
   sourceName: string;
   /** Live input peak of the source in dBFS, or null when silent or unknown. */
   inputDb: number | null;
@@ -23,9 +14,8 @@ interface Props {
 }
 
 const SETTINGS_DEBOUNCE_MS = 150;
-const STRUCTURE_EVENTS = ["SourceFilterCreated", "SourceFilterRemoved", "SourceFilterNameChanged", "SourceFilterListReindexed", "SourceFilterEnableStateChanged"] as const;
 
-export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
+export function FilterWizard({ ops, sourceName, inputDb, onClose }: Props) {
   const [filters, setFilters] = useState<SourceFilter[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -33,20 +23,17 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
 
   const reload = useCallback(
     () =>
-      loadFilters(sourceName)
+      ops
+        .list(sourceName)
         .then((f) => (setFilters(f), setError(null)))
         .catch((e: Error) => setError(t("讀取濾鏡失敗：{error}", { error: e.message }))),
-    [sourceName],
+    [ops, sourceName],
   );
 
   useEffect(() => {
     reload();
-    const handler = (e: { sourceName?: string }) => e.sourceName === sourceName && reload();
-    for (const name of STRUCTURE_EVENTS) obs.on(name as any, handler);
-    return () => {
-      for (const name of STRUCTURE_EVENTS) obs.off(name as any, handler);
-    };
-  }, [reload, sourceName]);
+    return ops.watch(sourceName, reload);
+  }, [ops, reload, sourceName]);
 
   const act = async (run: () => Promise<unknown>) => {
     setBusy(true);
@@ -66,7 +53,7 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
   const solve = (kinds: string[]) =>
     act(async () => {
       let last: string | null = null;
-      for (const kind of kinds) if (!has(kind)) last = await addFilter(sourceName, kind);
+      for (const kind of kinds) if (!has(kind)) last = await addFilter(ops, sourceName, kind);
       if (last) setOpen(last);
     });
 
@@ -108,6 +95,7 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
               {audioFilters.map((f, i) => (
                 <FilterCard
                   key={f.name}
+                  ops={ops}
                   sourceName={sourceName}
                   filter={f}
                   inputDb={inputDb}
@@ -116,9 +104,9 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
                   first={i === 0}
                   last={i === audioFilters.length - 1}
                   onToggleExpanded={() => setOpen(open === f.name ? null : f.name)}
-                  onEnabled={(on) => act(() => setFilterEnabled(sourceName, f.name, on))}
-                  onMove={(delta) => act(() => moveFilter(sourceName, f.name, audioFilters[i + delta].index))}
-                  onRemove={() => act(() => removeFilter(sourceName, f.name))}
+                  onEnabled={(on) => act(() => ops.setEnabled(sourceName, f.name, on))}
+                  onMove={(delta) => act(() => ops.move(sourceName, f.name, audioFilters[i + delta].index))}
+                  onRemove={() => act(() => ops.remove(sourceName, f.name))}
                   onError={setError}
                 />
               ))}
@@ -131,6 +119,7 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
 }
 
 interface CardProps {
+  ops: FilterOps;
   sourceName: string;
   filter: SourceFilter;
   inputDb: number | null;
@@ -163,7 +152,7 @@ function FilterCard(props: CardProps) {
     const send = pending.current;
     if (Object.keys(send).length === 0) return;
     pending.current = {};
-    updateFilterSettings(sourceName, filter.name, send).catch((e: Error) => props.onError(t("直播軟體沒有接受這個設定：{error}", { error: e.message })));
+    props.ops.setSettings(sourceName, filter.name, send).catch((e: Error) => props.onError(t("直播軟體沒有接受這個設定：{error}", { error: e.message })));
   };
   const flushRef = useRef(flush);
   flushRef.current = flush;

@@ -6,13 +6,13 @@ import {
   deviceCoverage,
   useSystemAudio,
 } from "../systemAudio";
-import type { AudioBackend, CaptureSettings } from "../obsAudio";
+import type { CaptureSettings, SoftwareAdapter } from "../adapter";
 import type { AudioSource } from "../types";
 import type { AddSourceStart } from "./AddSourceWizard";
 import { t } from "../i18n";
 
 interface Props {
-  backend: AudioBackend;
+  adapter: SoftwareAdapter;
   sources: AudioSource[];
   onAdd: (start: AddSourceStart) => void;
 }
@@ -21,14 +21,14 @@ interface Props {
 const HOLD_MS = 4000;
 
 /** Apps and playback devices making sound right now, and whether OBS captures them. */
-export function SystemSounds({ backend, sources, onAdd }: Props) {
+export function SystemSounds({ adapter, sources, onAdd }: Props) {
   const system = useSystemAudio(true, 1000);
   const [captures, setCaptures] = useState<CaptureSettings>(new Map());
   const lastHeard = useRef(new Map<string, number>());
 
   useEffect(() => {
-    backend.captureSettings(sources).then(setCaptures);
-  }, [sources]);
+    adapter.captureSettings(sources).then(setCaptures);
+  }, [adapter, sources]);
 
   if (!system?.supported) return null;
 

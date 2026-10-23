@@ -5,7 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { OBSWebSocketError } from "obs-websocket-js";
 import { useEffect, useState } from "react";
 import { t } from "./i18n";
-import { type ConnectionState, obs } from "./obs";
+import type { ConnectionState } from "./connection";
+import { obs } from "./obsClient";
 
 const VENDOR = "soundcheck";
 
@@ -58,6 +59,28 @@ export const plugin = {
   heartbeat: () => request("Heartbeat"),
   resumeStreamAudio: () => request("ResumeStreamAudio"),
 };
+
+/**
+ * What the plugin reports once `active` (connected to OBS) turns true: null when it isn't
+ * loaded, undefined until it has answered or while inactive. OBS only loads plugins at startup,
+ * so one answer lasts for the whole connection.
+ */
+export function usePluginInfo(active: boolean): PluginInfo | null | undefined {
+  const [info, setInfo] = useState<PluginInfo | null | undefined>(undefined);
+  useEffect(() => {
+    setInfo(undefined);
+    if (!active) return;
+    let alive = true;
+    plugin.info().then(
+      (i) => alive && setInfo(i),
+      () => alive && setInfo(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [active]);
+  return info;
+}
 
 /** What is on disk and running, from plugin_install.rs. */
 export interface PluginFiles {

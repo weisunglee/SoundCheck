@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { t } from "../i18n";
-import { retryConnection } from "../obs";
+import { retryConnection } from "../connection";
 import { type SoftwareChoice, loadSoftwareChoice, saveSoftwareChoice } from "../software";
 
 /** Which streaming software to connect to; changing it reconnects right away. */

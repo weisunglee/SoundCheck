@@ -1,6 +1,7 @@
 // Sound playing on this computer, and whether OBS already captures it.
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import type { CaptureSettings } from "./adapter";
 
 export interface SystemDevice {
   id: string;
@@ -58,7 +59,6 @@ export const CAPTURE_KINDS = {
 
 export const CAPTURE_KIND_SET = new Set<string>([...CAPTURE_KINDS.input, ...CAPTURE_KINDS.output, ...CAPTURE_KINDS.app]);
 
-type CaptureSettings = Map<string, { kind: string; settings: Record<string, any> }>;
 
 // OBS stores a window as "title:class:exe", escaping "#" and ":" inside each part.
 const encodePart = (s: string) => s.replace(/#/g, "#22").replace(/:/g, "#3A");

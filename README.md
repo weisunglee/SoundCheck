@@ -170,7 +170,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 ### 直播軟體連接層
 
-`src/obsAudio.ts` 定義介面 `AudioBackend`（狀態、各種設定的操作、新增來源、讀取擷取設定），OBS 的實作在同一檔，Streamlabs 的實作在 `src/streamlabsAudio.ts`。每個軟體在 `src/software.ts` 宣告自己能做什麼（`Capabilities`），介面依此隱藏不支援的功能。Streamlabs 的 JSON-RPC 用戶端在 `src/streamlabs.ts`，傳輸由 Rust 的 `src-tauri/src/slobs.rs` 負責（tokio 的 named pipe／Unix socket）；`src-tauri/src/presence.rs` 每秒偵測兩個軟體是否在執行、是否可以連線。
+`src/adapter.ts` 是 SoundCheck 和直播軟體之間的 seam：每個直播軟體一個 adapter（`src/obsAdapter.ts`、`src/streamlabsAdapter.ts`），提供讀取狀態、回報變更和各種設定操作；做不到的操作直接不提供，`capabilitiesOf()` 依此推導介面要隱藏哪些功能。`src/audio.ts` 的 `useAudio` 是所有軟體共用的狀態層（載入、套用變更、結構變更後重新讀取、操作時先更新畫面）；濾鏡精靈（`src/filters.ts`）和設定檔（`src/profiles.ts`）也只透過 adapter 操作。obs-websocket 連線本身在 `src/obsClient.ts`，連線和重試流程在 `src/connection.ts`。Streamlabs 的 JSON-RPC 用戶端在 `src/streamlabs.ts`，傳輸由 Rust 的 `src-tauri/src/slobs.rs` 負責（tokio 的 named pipe／Unix socket）；`src-tauri/src/presence.rs` 每秒偵測兩個軟體是否在執行、是否可以連線。
 
 Streamlabs 的音量用 libobs 的 IEC 推桿曲線（deflection 0～1 對應 -60～0 dB），所以 SoundCheck 設定音量時先把 dB 換成 deflection。它沒有推桿和靜音的變更事件，所以每秒輪詢一次音訊來源；場景和來源的結構變更有事件可以訂閱。
 

@@ -339,6 +339,7 @@ const table: Record<string, string> = {
   "，直播用的是音軌 {tracks}。": "; the stream uses track {tracks}.",
   "；另外 {n} 個在場景裡但觀眾聽不到": "; {n} more are in the scene but not heard",
   "{app} 不提供音量表、濾鏡、監聽和音軌的設定，也不能裝外掛，所以這些功能在 {app} 上無法使用；音量、靜音和場景可以正常調整。": "{app} doesn't offer level meters, filters, monitoring or track settings, and can't load the plugin, so those features aren't available with {app}. Volume, mute and scenes work as usual.",
+  "{app} 不支援設定檔。": "{app} doesn't support profiles.",
   "{app} 不提供音量表": "{app} doesn't provide level meters",
   "Streamlabs 沒有在執行": "Streamlabs isn't running",
   "開啟 Streamlabs Desktop 後這裡會自動連上，不需要設定或輸入 Token。": "Open Streamlabs Desktop and this connects automatically; no setup or token needed.",

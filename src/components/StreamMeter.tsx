@@ -28,7 +28,7 @@ export function StreamMeter({ level, running, pluginLoaded, streamPaused, source
     { db: MIN_DB, at: 0 },
   ]);
   const recentPeaks = useRef<{ db: number; at: number }[]>([]);
-  const monitored = sources.filter((s) => s.monitorType !== "OBS_MONITORING_TYPE_NONE").map((s) => s.name);
+  const monitored = sources.filter((s) => s.monitorType !== "off").map((s) => s.name);
 
   const now = performance.now();
   const peaks = (level?.peaks ?? [0, 0]).map(toDb);

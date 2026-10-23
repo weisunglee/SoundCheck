@@ -1,5 +1,6 @@
-// What each OBS audio filter does, in plain words, and how the filter wizard adds and orders them.
-import { obs } from "./obs";
+// What each audio filter does, in plain words, and how the filter wizard adds and orders them.
+// The filters themselves are reached through the adapter's FilterOps (src/adapter.ts).
+import type { FilterOps } from "./adapter";
 import { msg, t } from "./i18n";
 
 export interface FilterInfo {
@@ -10,7 +11,7 @@ export interface FilterInfo {
   what: string;
   /** Where it sits in the chain; lower runs first. */
   order: number;
-  /** Settings the wizard creates it with (anything missing keeps OBS's default). */
+  /** Settings the wizard creates it with (anything missing keeps the software's default). */
   initial: Record<string, string | number | boolean>;
 }
 
@@ -109,41 +110,6 @@ export const PROBLEMS: Problem[] = [
   },
 ];
 
-export interface SourceFilter {
-  name: string;
-  kind: string;
-  enabled: boolean;
-  /** Position among all of the source's filters, including video ones. */
-  index: number;
-  /** OBS defaults merged with this filter's own settings. */
-  settings: Record<string, any>;
-}
-
-/** Every filter on a source, with full settings, in chain order. */
-export async function loadFilters(sourceName: string): Promise<SourceFilter[]> {
-  const { filters } = await obs.call("GetSourceFilterList", { sourceName });
-  const list = filters as { filterName: string; filterKind: string; filterEnabled: boolean; filterIndex: number; filterSettings: Record<string, any> }[];
-  const kinds = [...new Set(list.map((f) => f.filterKind))];
-  const defaults = new Map<string, Record<string, any>>();
-  await Promise.all(
-    kinds.map((filterKind) =>
-      obs
-        .call("GetSourceFilterDefaultSettings", { filterKind })
-        .then((r) => defaults.set(filterKind, r.defaultFilterSettings as Record<string, any>))
-        .catch(() => defaults.set(filterKind, {})),
-    ),
-  );
-  return list
-    .map((f) => ({
-      name: f.filterName,
-      kind: f.filterKind,
-      enabled: f.filterEnabled,
-      index: f.filterIndex,
-      settings: { ...defaults.get(f.filterKind), ...f.filterSettings },
-    }))
-    .sort((a, b) => a.index - b.index);
-}
-
 function uniqueName(base: string, taken: Set<string>): string {
   if (!taken.has(base)) return base;
   for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
@@ -153,31 +119,15 @@ function uniqueName(base: string, taken: Set<string>): string {
  * Adds a filter of `kind` with the wizard's starting settings and moves it to its place in the
  * recommended chain order. Filters the wizard does not know keep their position.
  */
-export async function addFilter(sourceName: string, kind: string): Promise<string> {
+export async function addFilter(ops: FilterOps, sourceName: string, kind: string): Promise<string> {
   const info = FILTERS[kind];
-  const existing = await loadFilters(sourceName);
-  // The filter is named in the UI language, since that is the name the user then sees in OBS.
+  const existing = await ops.list(sourceName);
+  // The filter is named in the UI language, since that is the name the user then sees in the software.
   const filterName = uniqueName(t(info.label), new Set(existing.map((f) => f.name)));
-  await obs.call("CreateSourceFilter", { sourceName, filterName, filterKind: kind, filterSettings: info.initial });
+  await ops.create(sourceName, filterName, kind, info.initial);
 
   // Insert before the first known filter that should run after this one.
   const after = existing.find((f) => FILTERS[f.kind] && FILTERS[f.kind].order > info.order);
-  if (after) await obs.call("SetSourceFilterIndex", { sourceName, filterName, filterIndex: after.index });
+  if (after) await ops.move(sourceName, filterName, after.index);
   return filterName;
-}
-
-export async function removeFilter(sourceName: string, filterName: string) {
-  await obs.call("RemoveSourceFilter", { sourceName, filterName });
-}
-
-export async function moveFilter(sourceName: string, filterName: string, filterIndex: number) {
-  await obs.call("SetSourceFilterIndex", { sourceName, filterName, filterIndex });
-}
-
-export async function updateFilterSettings(sourceName: string, filterName: string, filterSettings: Record<string, string | number | boolean>) {
-  await obs.call("SetSourceFilterSettings", { sourceName, filterName, filterSettings, overlay: true });
-}
-
-export async function setFilterEnabled(sourceName: string, filterName: string, filterEnabled: boolean) {
-  await obs.call("SetSourceFilterEnabled", { sourceName, filterName, filterEnabled });
 }

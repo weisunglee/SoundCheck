@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { type ConnectionState, type SoftwarePresence, loadManualSettings, retryConnection, saveManualSettings } from "../obs";
+import { type ConnectionState, type SoftwarePresence, loadManualSettings, retryConnection, saveManualSettings } from "../connection";
 import { SoftwarePicker } from "./SoftwarePicker";
 import { t } from "../i18n";
 

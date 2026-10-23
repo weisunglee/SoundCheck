@@ -5,11 +5,13 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { FILTERS, addFilter, loadFilters, moveFilter, removeFilter, updateFilterSettings } from "../src/filters";
+import { FILTERS, addFilter } from "../src/filters";
 import { t } from "../src/i18n";
-import { obs } from "../src/obs";
-import { loadState } from "../src/obsAudio";
+import { obsAdapter } from "../src/obsAdapter";
+import { obs } from "../src/obsClient";
 import { applyProfile, captureProfile } from "../src/profiles";
+
+const filters = obsAdapter.filters!;
 
 const SCENE = "SoundCheck 測試場景";
 const INPUT = "SoundCheck 測試來源";
@@ -62,9 +64,9 @@ try {
 
   // 3. Filters land in the recommended order regardless of the order they are added in.
   for (const kind of ["limiter_filter", "compressor_filter", "noise_suppress_filter_v2", "noise_gate_filter"]) {
-    if (kinds.has(kind)) await addFilter(INPUT, kind);
+    if (kinds.has(kind)) await addFilter(filters, INPUT, kind);
   }
-  let chain = await loadFilters(INPUT);
+  let chain = await filters.list(INPUT);
   check(
     chain.map((f) => f.kind).join(",") === "noise_suppress_filter_v2,noise_gate_filter,compressor_filter,limiter_filter",
     "wizard keeps the recommended chain order",
@@ -76,19 +78,19 @@ try {
   check(compressor.settings.ratio === 4 && compressor.settings.threshold === -18, "compressor starts at 4:1, -18 dB");
 
   // 4. Settings, moving and removing.
-  await updateFilterSettings(INPUT, gate.name, { open_threshold: -30 });
-  chain = await loadFilters(INPUT);
+  await filters.setSettings(INPUT, gate.name, { open_threshold: -30 });
+  chain = await filters.list(INPUT);
   check(chain.find((f) => f.name === gate.name)?.settings.open_threshold === -30, "slider change reaches OBS");
   check(chain.find((f) => f.name === gate.name)?.settings.close_threshold === -32, "other settings untouched by overlay");
-  await moveFilter(INPUT, gate.name, 0);
-  chain = await loadFilters(INPUT);
+  await filters.move(INPUT, gate.name, 0);
+  chain = await filters.list(INPUT);
   check(chain[0].name === gate.name, "filter moves up");
-  const added2 = await addFilter(INPUT, "gain_filter");
+  const added2 = await addFilter(filters, INPUT, "gain_filter");
   check(added2 === t("增益"), "new filter gets its plain name in the UI language", added2);
-  const dup = await addFilter(INPUT, "gain_filter");
+  const dup = await addFilter(filters, INPUT, "gain_filter");
   check(dup === `${t("增益")} 2`, "second filter of a kind gets a unique name", dup);
-  await removeFilter(INPUT, dup);
-  check(!(await loadFilters(INPUT)).some((f) => f.name === dup), "filter removed");
+  await filters.remove(INPUT, dup);
+  check(!(await filters.list(INPUT)).some((f) => f.name === dup), "filter removed");
 
   // 5. Profiles: capture, change things, apply, and everything comes back.
   await obs.call("SetInputVolume", { inputName: INPUT, inputVolumeDb: -10 });
@@ -97,10 +99,10 @@ try {
   await obs.call("SetInputAudioSyncOffset", { inputName: INPUT, inputAudioSyncOffset: 50 });
   await obs.call("SetInputAudioMonitorType", { inputName: INPUT, monitorType: "OBS_MONITORING_TYPE_MONITOR_ONLY" });
   await obs.call("SetInputAudioTracks", { inputName: INPUT, inputAudioTracks: { "1": true, "2": true, "3": false, "4": false, "5": false, "6": false } });
-  const state = await loadState();
+  const state = await obsAdapter.load();
   const source = state.sources.find((s) => s.name === INPUT);
   check(source !== undefined, "test source shows up in the app state");
-  const profile = await captureProfile("verify", state.sources.filter((s) => s.name === INPUT));
+  const profile = await captureProfile(obsAdapter, "verify", state.sources.filter((s) => s.name === INPUT));
   const savedChain = profile.sources[0].filters.map((f) => f.name);
 
   await obs.call("SetInputVolume", { inputName: INPUT, inputVolumeDb: 0 });
@@ -109,25 +111,25 @@ try {
   await obs.call("SetInputAudioSyncOffset", { inputName: INPUT, inputAudioSyncOffset: 0 });
   await obs.call("SetInputAudioMonitorType", { inputName: INPUT, monitorType: "OBS_MONITORING_TYPE_NONE" });
   await obs.call("SetInputAudioTracks", { inputName: INPUT, inputAudioTracks: { "2": false, "5": true } });
-  await removeFilter(INPUT, compressor.name);
-  await updateFilterSettings(INPUT, gate.name, { open_threshold: -10 });
-  await addFilter(INPUT, "expander_filter");
+  await filters.remove(INPUT, compressor.name);
+  await filters.setSettings(INPUT, gate.name, { open_threshold: -10 });
+  await addFilter(filters, INPUT, "expander_filter");
 
-  const after = (await loadState()).sources.filter((s) => s.name === INPUT);
-  const result = await applyProfile({ ...profile, sources: [...profile.sources, { ...profile.sources[0], name: "不存在的來源" }] }, after);
+  const after = (await obsAdapter.load()).sources.filter((s) => s.name === INPUT);
+  const result = await applyProfile(obsAdapter, { ...profile, sources: [...profile.sources, { ...profile.sources[0], name: "不存在的來源" }] }, after);
   check(result.applied.join() === INPUT && result.missing.join() === "不存在的來源", "apply reports applied and missing sources", JSON.stringify(result));
   check(result.extraFilters.some((f) => f.includes(t("擴展器"))), "filter not in the profile is reported, not removed");
 
-  const restored = (await loadState()).sources.find((s) => s.name === INPUT)!;
+  const restored = (await obsAdapter.load()).sources.find((s) => s.name === INPUT)!;
   // OBS keeps balance as a float, so 0.3 comes back as 0.30000001.
   check(
     restored.volumeDb === -10 && restored.muted && Math.abs(restored.balance - 0.3) < 1e-4 && restored.syncOffsetMs === 50,
     "volume, mute, balance, sync restored",
     JSON.stringify(restored),
   );
-  check(restored.monitorType === "OBS_MONITORING_TYPE_MONITOR_ONLY", "monitor type restored");
+  check(restored.monitorType === "monitorOnly", "monitor type restored");
   check(restored.tracks.join() === "1,2", "tracks restored", restored.tracks.join());
-  const restoredChain = await loadFilters(INPUT);
+  const restoredChain = await filters.list(INPUT);
   check(
     savedChain.every((n, i) => restoredChain[i]?.name === n),
     "filter chain restored in saved order (deleted one recreated)",

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import { obs } from "../obs";
+import { outputsActive } from "../obsAdapter";
 import { assessPlugin, usePluginFiles } from "../plugin";
 import { t } from "../i18n";
 
@@ -40,8 +40,8 @@ function useOutputsActive(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const poll = () =>
-      Promise.all([obs.call("GetStreamStatus"), obs.call("GetRecordStatus")])
-        .then(([s, r]) => setActive({ streaming: s.outputActive, recording: r.outputActive }))
+      outputsActive()
+        .then(setActive)
         .catch(() => {});
     poll();
     const id = setInterval(poll, 2000);

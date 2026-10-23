@@ -1,5 +1,5 @@
 // Prints what Streamlabs Desktop's local API returns for the calls SoundCheck makes, so the
-// field names in src/streamlabsAudio.ts can be checked against a real install. Read-only.
+// field names in src/streamlabsAdapter.ts can be checked against a real install. Read-only.
 // Run on the computer where Streamlabs runs:  node tools/inspect-streamlabs.mjs
 import net from "node:net";
 import { homedir } from "node:os";

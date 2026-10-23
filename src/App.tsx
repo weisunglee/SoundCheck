@@ -12,10 +12,11 @@ import { SoundTest } from "./components/SoundTest";
 import { statusLabel } from "./components/StatusBadge";
 import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
-import { useConnection } from "./obs";
-import { useObsAudio } from "./obsAudio";
-import { useStreamlabsAudio } from "./streamlabsAudio";
-import { assessPlugin, pluginApplies, usePluginFiles } from "./plugin";
+import { useAudio } from "./audio";
+import { useConnection } from "./connection";
+import { obsAdapter } from "./obsAdapter";
+import { assessPlugin, pluginApplies, usePluginFiles, usePluginInfo } from "./plugin";
+import { streamlabsAdapter } from "./streamlabsAdapter";
 import { itemsToShow, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
 import type { AudioSource } from "./types";
@@ -50,17 +51,15 @@ export default function App() {
   };
   const { state: connection, presence } = useConnection();
   const software = connection.kind === "connected" ? connection.software : null;
-  // Both hooks always run (React's rule); only the one for the connected software is active.
-  const obsAudio = useObsAudio(software === "obs");
-  const streamlabsAudio = useStreamlabsAudio(software === "streamlabs");
-  const audio = software === "streamlabs" ? streamlabsAudio : obsAudio;
-  const caps = audio.capabilities;
-  const { state, levels } = audio;
+  const audio = useAudio(software === "obs" ? obsAdapter : software === "streamlabs" ? streamlabsAdapter : null);
+  const { adapter, state, levels, capabilities: caps } = audio;
+  const pluginInfo = usePluginInfo(caps.plugin && state !== null);
+  const pluginLoaded = Boolean(pluginInfo);
   const pluginFiles = usePluginFiles(5000);
   const local = connection.kind === "connected" && connection.local;
-  const streamTap = useStreamTap(local && caps.plugin && (state?.pluginAvailable ?? false));
+  const streamTap = useStreamTap(local && caps.plugin && pluginLoaded);
   // The installer is for this computer's OBS only.
-  const need = pluginFiles && pluginApplies(connection) ? assessPlugin(pluginFiles, state?.pluginVersion ?? null, state !== null).need : "none";
+  const need = pluginFiles && pluginApplies(connection) ? assessPlugin(pluginFiles, pluginInfo?.pluginVersion ?? null, pluginInfo !== undefined).need : "none";
   const NEED_LABELS = { install: t("安裝外掛"), update: t("更新外掛 {version}", { version: pluginFiles?.bundledVersion ?? "" }), notLoaded: t("外掛沒有載入") } as const;
 
   const lastSound = useRef<Record<string, number>>({});
@@ -115,9 +114,9 @@ export default function App() {
       <button
         type="button"
         className="btn primary"
-        disabled={!state?.pluginAvailable || !local}
+        disabled={!pluginLoaded || !local}
         title={
-          !state ? t("連上直播軟體後才能試音") : !local ? t("直播軟體在另一台電腦時無法試音") : !state.pluginAvailable ? t("試音需要 SoundCheck 外掛") : undefined
+          !state ? t("連上直播軟體後才能試音") : !local ? t("直播軟體在另一台電腦時無法試音") : !pluginLoaded ? t("試音需要 SoundCheck 外掛") : undefined
         }
         onClick={() => setSoundTestOpen(true)}
       >
@@ -138,7 +137,7 @@ export default function App() {
   // Rendered right after the header in both layouts below, so React keeps the dialog (and an
   // install in progress) when the app switches between "not connected" and the mixer.
   const pluginDialog = pluginOpen && (
-    <PluginInstall obsConnected={state !== null} loadedVersion={state?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+    <PluginInstall obsConnected={state !== null} loadedVersion={pluginInfo?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
   );
 
   if (!state) {
@@ -161,7 +160,7 @@ export default function App() {
   const statusIn = (s: AudioSource, scene: string) => sourceStatus(s, scene, scenes, streamTracks);
 
   const withStatus = sources.map((s) => ({ source: s, status: statusIn(s, programScene) }));
-  // One list in a fixed order (global devices first, then OBS's own order), so a card never
+  // One list in a fixed order (global devices first, then the software's own order), so a card never
   // moves when its status changes and muting can be undone with a second click in the same spot.
   const inScene = [
     ...withStatus.filter((x) => x.status !== "notInScene" && x.source.global),
@@ -193,7 +192,7 @@ export default function App() {
       onOpenFilters={() => setFiltersFor(source.name)}
       caps={caps}
       onAddStreamTracks={() => audio.addStreamTracks(source.name)}
-      onShow={() => audio.showInProgram(itemsToShow(programScene, source.name, scenes))}
+      onShow={() => audio.showItems(itemsToShow(programScene, source.name, scenes))}
     />
   );
 
@@ -202,7 +201,7 @@ export default function App() {
       {header}
       {pluginDialog}
       {audio.error && <div className="error-bar">{audio.error}</div>}
-      {local && caps.plugin && !state.pluginAvailable && (
+      {local && caps.plugin && pluginInfo === null && (
         <div className="notice-bar">
           {t("直播軟體沒有載入 SoundCheck 外掛：試音無法使用，「沒送到直播」先假設直播用的是音軌 1。")}
           {need !== "none" && (
@@ -250,7 +249,7 @@ export default function App() {
               <StreamMeter
                 level={streamTap.level}
                 running={streamTap.running}
-                pluginLoaded={state.pluginAvailable}
+                pluginLoaded={pluginInfo !== null}
                 streamPaused={soundTestPlaying}
                 sources={sources}
                 onInstallPlugin={() => setPluginOpen(true)}
@@ -270,7 +269,7 @@ export default function App() {
                 </p>
               )}
 
-              {local && <SystemSounds backend={audio} sources={sources} onAdd={setAddStart} />}
+              {local && adapter && <SystemSounds adapter={adapter} sources={sources} onAdd={setAddStart} />}
 
               {elsewhere.length > 0 && (
                 <section>
@@ -307,10 +306,10 @@ export default function App() {
       </div>
 
       {soundTestOpen && <SoundTest onPlayingChange={setSoundTestPlaying} onClose={() => setSoundTestOpen(false)} />}
-      {profilesOpen && <ProfilesDialog sources={sources} onClose={() => setProfilesOpen(false)} />}
-      {addStart && (
+      {profilesOpen && adapter && <ProfilesDialog adapter={adapter} sources={sources} onClose={() => setProfilesOpen(false)} />}
+      {addStart && adapter && (
         <AddSourceWizard
-          backend={audio}
+          adapter={adapter}
           sources={sources}
           sceneOrder={sceneOrder}
           programScene={programScene}
@@ -319,7 +318,7 @@ export default function App() {
           onClose={() => setAddStart(null)}
         />
       )}
-      {filtersFor && <FilterWizard sourceName={filtersFor} inputDb={audio.inputDb[filtersFor] ?? null} onClose={() => setFiltersFor(null)} />}
+      {filtersFor && adapter?.filters && <FilterWizard ops={adapter.filters} sourceName={filtersFor} inputDb={audio.inputDb[filtersFor] ?? null} onClose={() => setFiltersFor(null)} />}
     </div>
   );
 }

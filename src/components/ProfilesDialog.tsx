@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { obs } from "../obs";
+import type { SoftwareAdapter } from "../adapter";
 import { type ApplyResult, BACKUPS_KEPT, type Profile, applyProfile, backupName, captureProfile } from "../profiles";
 import type { AudioSource } from "../types";
 import { locale, t } from "../i18n";
@@ -13,6 +13,7 @@ interface Summary {
 }
 
 interface Props {
+  adapter: SoftwareAdapter;
   sources: AudioSource[];
   onClose: () => void;
 }
@@ -21,7 +22,7 @@ type Busy = { kind: "idle" } | { kind: "working"; label: string } | { kind: "err
 
 const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) : "");
 
-export function ProfilesDialog({ sources, onClose }: Props) {
+export function ProfilesDialog({ adapter, sources, onClose }: Props) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<Busy>({ kind: "idle" });
@@ -54,7 +55,7 @@ export function ProfilesDialog({ sources, onClose }: Props) {
 
   const save = (profileName: string) =>
     run(t("儲存中…"), async () => {
-      const profile = await captureProfile(profileName, sources);
+      const profile = await captureProfile(adapter, profileName, sources);
       await invoke("profile_save", { name: profileName, data: profile });
       setSaved(profileName);
       setName("");
@@ -65,18 +66,18 @@ export function ProfilesDialog({ sources, onClose }: Props) {
       const profile = await invoke<Profile>("profile_load", { name: profileName });
       // Keep the current settings first, so a wrong profile can be undone; keep only the newest few.
       const backup = backupName();
-      await invoke("profile_save", { name: backup, data: await captureProfile(backup, sources, true) });
+      await invoke("profile_save", { name: backup, data: await captureProfile(adapter, backup, sources, true) });
       const backups = (await invoke<Summary[]>("profiles_list")).filter((p) => p.backup);
       for (const old of backups.slice(BACKUPS_KEPT)) await invoke("profile_delete", { name: old.name });
-      setResult({ name: profileName, result: await applyProfile(profile, sources) });
+      setResult({ name: profileName, result: await applyProfile(adapter, profile, sources) });
     });
 
   const askApply = async (profileName: string) => {
-    const [profile, collections] = await Promise.all([
+    const [profile, collection] = await Promise.all([
       invoke<Profile>("profile_load", { name: profileName }).catch(() => null),
-      obs.call("GetSceneCollectionList").catch(() => null),
+      adapter.sceneCollection?.().catch(() => null) ?? null,
     ]);
-    const current = collections?.currentSceneCollectionName;
+    const current = collection;
     const otherCollection = profile?.sceneCollection && current && profile.sceneCollection !== current ? profile.sceneCollection : null;
     setConfirm({ kind: "apply", name: profileName, otherCollection });
   };

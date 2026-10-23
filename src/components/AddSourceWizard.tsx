@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import type { AudioBackend, CaptureSettings } from "../obsAudio";
+import type { CaptureSettings, SoftwareAdapter } from "../adapter";
 import {
   CAPTURE_KINDS,
   type SystemApp,
@@ -24,7 +24,7 @@ export interface AddSourceStart {
 }
 
 interface Props {
-  backend: AudioBackend;
+  adapter: SoftwareAdapter;
   sources: AudioSource[];
   sceneOrder: string[];
   programScene: string;
@@ -49,7 +49,7 @@ const MATCH_BY_EXE = 2;
 
 type Pick = { kind: "input" | "output"; deviceId: string; name: string } | { kind: "app"; app: SystemApp; name: string };
 
-export function AddSourceWizard({ backend, sources, sceneOrder, programScene, start, local, onClose }: Props) {
+export function AddSourceWizard({ adapter, sources, sceneOrder, programScene, start, local, onClose }: Props) {
   const [kind, setKind] = useState<SoundKind | null>(start?.kind ?? null);
   const [pick, setPick] = useState<Pick | null>(null);
   const [name, setName] = useState("");
@@ -89,13 +89,13 @@ export function AddSourceWizard({ backend, sources, sceneOrder, programScene, st
   }, []);
 
   useEffect(() => {
-    backend
+    adapter
       .listInputKinds()
       .then(setAvailableKinds)
       .catch(() => setAvailableKinds(new Set()));
   }, []);
   useEffect(() => {
-    backend.captureSettings(sources).then(setCaptures);
+    adapter.captureSettings(sources).then(setCaptures);
   }, [sources]);
 
   const obsKind = (k: SoundKind) => CAPTURE_KINDS[k].find((x) => availableKinds?.has(x)) ?? null;
@@ -135,7 +135,7 @@ export function AddSourceWizard({ backend, sources, sceneOrder, programScene, st
       const inputSettings: { [key: string]: string | number } =
         pick.kind === "app" ? { window: obsWindowString(pick.app), priority: MATCH_BY_EXE } : { device_id: pick.deviceId };
       const targets = allScenes ? sceneOrder : [programScene];
-      await backend.createSource(inputName, inputKind, inputSettings, targets);
+      await adapter.createSource(inputName, inputKind, inputSettings, targets);
       setStatus({ kind: "done", name: inputName });
     } catch (e) {
       setStatus({ kind: "error", message: t("直播軟體沒有建立這個來源：{error}", { error: (e as Error).message }) });

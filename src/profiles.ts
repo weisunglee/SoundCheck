@@ -1,6 +1,7 @@
-// Capturing the audio settings of every source as a profile, and applying a profile back to OBS.
-import { FILTERS, loadFilters } from "./filters";
-import { obs } from "./obs";
+// Capturing the audio settings of every source as a profile, and applying a profile back to the
+// streaming software. Works with any adapter that has everything profiles save (capabilities.profiles).
+import type { FilterOps, SoftwareAdapter } from "./adapter";
+import { FILTERS } from "./filters";
 import type { AudioSource, MonitorType } from "./types";
 import { t } from "./i18n";
 
@@ -25,7 +26,8 @@ interface ProfileSource {
   name: string;
   volumeDb: number;
   muted: boolean;
-  monitorType: MonitorType;
+  /** Profiles saved before this was neutral hold OBS's names ("OBS_MONITORING_TYPE_…"). */
+  monitorType: MonitorType | string;
   balance: number;
   syncOffsetMs: number;
   tracks: number[];
@@ -37,7 +39,7 @@ export interface Profile {
   version: number;
   name: string;
   savedAt: string;
-  /** OBS scene collection the profile was saved in; source names only mean the same thing there. */
+  /** Scene collection the profile was saved in; source names only mean the same thing there. */
   sceneCollection?: string;
   /** Saved automatically before applying another profile; old ones are pruned. */
   backup?: boolean;
@@ -46,19 +48,40 @@ export interface Profile {
 
 export interface ApplyResult {
   applied: string[];
-  /** In the profile but not in OBS (renamed or deleted). */
+  /** In the profile but not in the software (renamed or deleted). */
   missing: string[];
-  /** Audio filters in OBS that the profile does not have; left in place. */
+  /** Audio filters in the software that the profile does not have; left in place. */
   extraFilters: string[];
   errors: string[];
 }
 
-const TRACKS = [1, 2, 3, 4, 5, 6];
+type ProfileAdapter = Required<Pick<SoftwareAdapter, "setVolume" | "setMuted" | "setMonitorType" | "setBalance" | "setSyncOffset" | "setTracks" | "sceneCollection">> & {
+  filters: FilterOps;
+};
 
-export async function captureProfile(name: string, sources: AudioSource[], backup = false): Promise<Profile> {
+function profileAdapter(adapter: SoftwareAdapter): ProfileAdapter {
+  const { setMonitorType, setBalance, setSyncOffset, setTracks, filters, sceneCollection } = adapter;
+  if (!setMonitorType || !setBalance || !setSyncOffset || !setTracks || !filters || !sceneCollection) {
+    throw new Error(t("{app} 不支援設定檔。"));
+  }
+  return adapter as ProfileAdapter;
+}
+
+const LEGACY_MONITOR_TYPES: Record<string, MonitorType> = {
+  OBS_MONITORING_TYPE_NONE: "off",
+  OBS_MONITORING_TYPE_MONITOR_ONLY: "monitorOnly",
+  OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT: "monitorAndOutput",
+};
+
+export function profileMonitorType(saved: string): MonitorType {
+  return LEGACY_MONITOR_TYPES[saved] ?? (saved === "monitorOnly" || saved === "monitorAndOutput" ? saved : "off");
+}
+
+export async function captureProfile(adapter: SoftwareAdapter, name: string, sources: AudioSource[], backup = false): Promise<Profile> {
+  const sw = profileAdapter(adapter);
   const captured: ProfileSource[] = [];
   for (const s of sources) {
-    const filters = (await loadFilters(s.name)).filter((f) => FILTERS[f.kind]);
+    const filters = (await sw.filters.list(s.name)).filter((f) => FILTERS[f.kind]);
     captured.push({
       name: s.name,
       volumeDb: s.volumeDb,
@@ -70,24 +93,22 @@ export async function captureProfile(name: string, sources: AudioSource[], backu
       filters: filters.map((f) => ({ name: f.name, kind: f.kind, enabled: f.enabled, settings: f.settings })),
     });
   }
-  const { currentSceneCollectionName } = await obs.call("GetSceneCollectionList");
   return {
     version: PROFILE_VERSION,
     name,
     savedAt: new Date().toISOString(),
-    sceneCollection: currentSceneCollectionName,
+    sceneCollection: await sw.sceneCollection(),
     backup,
     sources: captured,
   };
 }
 
-type Json = { [key: string]: string | number | boolean | Json | Json[] | null };
-
 /**
- * Applies a profile to the sources that exist in OBS. Filters are created or updated to match
- * and put in the saved order at the top of the chain; filters the profile lacks are kept.
+ * Applies a profile to the sources that exist in the software. Filters are created or updated to
+ * match and put in the saved order at the top of the chain; filters the profile lacks are kept.
  */
-export async function applyProfile(profile: Profile, current: AudioSource[]): Promise<ApplyResult> {
+export async function applyProfile(adapter: SoftwareAdapter, profile: Profile, current: AudioSource[]): Promise<ApplyResult> {
+  const sw = profileAdapter(adapter);
   const result: ApplyResult = { applied: [], missing: [], extraFilters: [], errors: [] };
   const existing = new Set(current.map((s) => s.name));
 
@@ -98,17 +119,14 @@ export async function applyProfile(profile: Profile, current: AudioSource[]): Pr
     }
     const inputName = s.name;
     try {
-      await obs.call("SetInputVolume", { inputName, inputVolumeDb: s.volumeDb });
-      await obs.call("SetInputMute", { inputName, inputMuted: s.muted });
-      await obs.call("SetInputAudioMonitorType", { inputName, monitorType: s.monitorType });
-      await obs.call("SetInputAudioBalance", { inputName, inputAudioBalance: s.balance });
-      await obs.call("SetInputAudioSyncOffset", { inputName, inputAudioSyncOffset: s.syncOffsetMs });
-      await obs.call("SetInputAudioTracks", {
-        inputName,
-        inputAudioTracks: Object.fromEntries(TRACKS.map((t) => [String(t), s.tracks.includes(t)])),
-      });
+      await sw.setVolume(inputName, s.volumeDb);
+      await sw.setMuted(inputName, s.muted);
+      await sw.setMonitorType(inputName, profileMonitorType(s.monitorType));
+      await sw.setBalance(inputName, s.balance);
+      await sw.setSyncOffset(inputName, s.syncOffsetMs);
+      await sw.setTracks(inputName, s.tracks);
 
-      const have = await loadFilters(inputName);
+      const have = await sw.filters.list(inputName);
       const savedNames = new Set(s.filters.map((f) => f.name));
       let placed = 0;
       for (const f of s.filters) {
@@ -117,24 +135,20 @@ export async function applyProfile(profile: Profile, current: AudioSource[]): Pr
           result.errors.push(t("{source}：已經有另一種濾鏡叫「{filter}」，略過", { source: inputName, filter: f.name }));
           continue;
         }
-        // A filter the user renamed in OBS: reuse it instead of stacking a second one of the same kind.
+        // A filter the user renamed in the software: reuse it instead of stacking a second one of the same kind.
         if (!match) {
           const renamed = have.find((h) => h.kind === f.kind && !savedNames.has(h.name));
           if (renamed) {
-            await obs.call("SetSourceFilterName", { sourceName: inputName, filterName: renamed.name, newFilterName: f.name });
+            await sw.filters.rename(inputName, renamed.name, f.name);
             savedNames.add(renamed.name);
             renamed.name = f.name;
             match = renamed;
           }
         }
-        const filterSettings = f.settings as Json;
-        if (match) {
-          await obs.call("SetSourceFilterSettings", { sourceName: inputName, filterName: f.name, filterSettings, overlay: false });
-        } else {
-          await obs.call("CreateSourceFilter", { sourceName: inputName, filterName: f.name, filterKind: f.kind, filterSettings });
-        }
-        await obs.call("SetSourceFilterEnabled", { sourceName: inputName, filterName: f.name, filterEnabled: f.enabled });
-        await obs.call("SetSourceFilterIndex", { sourceName: inputName, filterName: f.name, filterIndex: placed });
+        if (match) await sw.filters.setSettings(inputName, f.name, f.settings, true);
+        else await sw.filters.create(inputName, f.name, f.kind, f.settings);
+        await sw.filters.setEnabled(inputName, f.name, f.enabled);
+        await sw.filters.move(inputName, f.name, placed);
         placed++;
       }
       const wanted = new Set(s.filters.map((f) => f.name));

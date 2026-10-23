@@ -3,8 +3,9 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { obs } from "../src/obs";
-import { loadState } from "../src/obsAudio";
+import { obs } from "../src/obsClient";
+import { obsAdapter } from "../src/obsAdapter";
+import { plugin } from "../src/plugin";
 import { scenesContaining, sourceStatus } from "../src/status";
 
 const configPath =
@@ -14,10 +15,11 @@ const configPath =
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 await obs.connect(`ws://127.0.0.1:${config.server_port}`, config.auth_required ? config.server_password : undefined);
 
-const state = await loadState();
+const state = await obsAdapter.load();
+const pluginInfo = await plugin.info().catch(() => null);
 await obs.disconnect();
 
-console.log(`plugin: ${state.pluginAvailable ? "loaded" : "missing"}, stream tracks: ${state.streamTracks.join(",")}`);
+console.log(`plugin: ${pluginInfo ? `loaded ${pluginInfo.pluginVersion}` : "missing"}, stream tracks: ${state.streamTracks.join(",")}`);
 console.log(`scenes (${state.sceneOrder.length}): ${state.sceneOrder.join(" | ")}`);
 const groups = state.scenes.filter((s) => s.isGroup).map((s) => s.name);
 console.log(`groups (${groups.length}): ${groups.join(" | ") || "none"}`);
@@ -42,7 +44,7 @@ for (const src of state.sources) {
   const filters = src.filters.map((f) => `${f.name}${f.enabled ? "" : "(off)"}`).join(", ") || "-";
   console.log(
     `${src.name} [${src.device}]${src.global ? " global" : ""} vol=${src.volumeDb.toFixed(1)}dB muted=${src.muted} ` +
-      `monitor=${src.monitorType.replace("OBS_MONITORING_TYPE_", "")} tracks=${src.tracks.join(",") || "none"} ` +
+      `monitor=${src.monitorType} tracks=${src.tracks.join(",") || "none"} ` +
       `filters=${filters} scenes=${where.length}`,
   );
 }

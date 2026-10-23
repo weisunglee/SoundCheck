@@ -1,14 +1,14 @@
 import { useState } from "react";
-import type { Capabilities } from "../software";
+import type { Capabilities } from "../adapter";
 import type { AudioSource, ChannelLevels, MonitorType, SourceStatus } from "../types";
 import { LevelMeter } from "./LevelMeter";
 import { StatusBadge } from "./StatusBadge";
 import { msg, t } from "../i18n";
 
 const MONITOR_OPTIONS: { value: MonitorType; label: string; explain: string }[] = [
-  { value: "OBS_MONITORING_TYPE_NONE", label: msg("關閉"), explain: msg("你的耳機聽不到這個聲音；有送到直播音軌的話，觀眾聽得到。") },
-  { value: "OBS_MONITORING_TYPE_MONITOR_ONLY", label: msg("僅監聽"), explain: msg("只有你的耳機聽得到，觀眾聽不到。") },
-  { value: "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT", label: msg("監聽輸出"), explain: msg("你的耳機和觀眾都聽得到。") },
+  { value: "off", label: msg("關閉"), explain: msg("你的耳機聽不到這個聲音；有送到直播音軌的話，觀眾聽得到。") },
+  { value: "monitorOnly", label: msg("僅監聽"), explain: msg("只有你的耳機聽得到，觀眾聽不到。") },
+  { value: "monitorAndOutput", label: msg("監聽輸出"), explain: msg("你的耳機和觀眾都聽得到。") },
 ];
 
 const SCALE_DB = [0, -10, -20, -30, -40, -50, -60];
@@ -83,7 +83,7 @@ export function ChannelStrip(props: Props) {
         <div className="hint">
           {t("監聽模式是「僅監聽」：直播軟體只把這個聲音送到你的耳機，直播裡聽不到。")}
           {props.caps.monitoringControl && (
-            <button type="button" className="link" onClick={() => props.onMonitorType("OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT")}>
+            <button type="button" className="link" onClick={() => props.onMonitorType("monitorAndOutput")}>
               {t("改成監聽並輸出")}
             </button>
           )}
