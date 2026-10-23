@@ -1,4 +1,4 @@
-//! Watches for OBS starting and stopping from a native thread.
+//! Watches for the streaming software (OBS, Streamlabs) starting and stopping from a native thread.
 //!
 //! The webview's own retry timer is not enough: Windows WebView2 throttles and
 //! eventually suspends timers in a minimized or hidden window, so a user who
@@ -12,16 +12,24 @@ use tauri::{AppHandle, Emitter};
 
 use crate::obs_config;
 use crate::plugin_install::obs_running;
+use crate::slobs;
 
 const POLL: Duration = Duration::from_secs(1);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(300);
 
-#[derive(Clone, Copy, PartialEq, Serialize)]
+#[derive(Clone, Copy, PartialEq, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ObsPresence {
+struct Presence {
     running: bool,
-    /// OBS is running and its WebSocket port accepts connections.
+    /// Running and accepting connections (OBS: WebSocket port open; Streamlabs: API pipe open).
     ready: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SoftwarePresence {
+    obs: Presence,
+    streamlabs: Presence,
 }
 
 fn websocket_port_open() -> bool {
@@ -30,18 +38,23 @@ fn websocket_port_open() -> bool {
     config.enabled && TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], config.port)), PROBE_TIMEOUT).is_ok()
 }
 
-/// Emits `obs-presence` whenever OBS starts, stops, or its WebSocket server becomes reachable.
+/// Emits `software-presence` whenever OBS or Streamlabs starts, stops, or becomes reachable.
 pub fn start(app: AppHandle) {
     std::thread::spawn(move || {
-        let mut last: Option<ObsPresence> = None;
+        let mut last: Option<SoftwarePresence> = None;
         loop {
-            let running = obs_running();
+            let previous = last.unwrap_or_default();
+            let obs_running = obs_running();
             // Probe the port only while OBS runs and has not been seen ready yet, so a
             // connected session is not disturbed by a connection attempt every second.
-            let ready = running && (last.is_some_and(|l| l.ready) || websocket_port_open());
-            let now = ObsPresence { running, ready };
+            let obs_ready = obs_running && (previous.obs.ready || websocket_port_open());
+            let streamlabs_running = slobs::running();
+            let now = SoftwarePresence {
+                obs: Presence { running: obs_running, ready: obs_ready },
+                streamlabs: Presence { running: streamlabs_running, ready: streamlabs_running && slobs::available() },
+            };
             if last != Some(now) {
-                let _ = app.emit("obs-presence", now);
+                let _ = app.emit("software-presence", now);
                 last = Some(now);
             }
             std::thread::sleep(POLL);

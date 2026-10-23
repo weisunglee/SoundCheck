@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { obs } from "../obs";
 import { compareVersions, usePluginStatus } from "../pluginStatus";
+import { t } from "../i18n";
 
 interface InstallError {
   kind: "obsRunning" | "permissionDenied" | "notBundled" | "cancelled" | "failed";
@@ -101,55 +102,57 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="plugin-title">
       <div className="dialog">
         <div className="dialog-head">
-          <h2 id="plugin-title">{status.installed ? "更新 OBS 外掛" : "安裝 OBS 外掛"}</h2>
+          <h2 id="plugin-title">{status.installed ? t("更新直播軟體外掛") : t("安裝直播軟體外掛")}</h2>
           <button type="button" className="link" onClick={() => (logEvent("closed dialog"), onClose())}>
-            關閉
+            {t("關閉")}
           </button>
         </div>
         <p className="dialog-lead">
-          試音需要在 OBS 裡裝一個小外掛 obs-audio-kit。它只會讀取直播的聲音，不會改變你的場景或設定。
+          {t("試音需要在直播軟體裡裝一個小外掛。它只會讀取直播的聲音，不會改變你的場景或設定。")}
         </p>
 
         {!bundled ? (
-          <div className="verdict verdict-bad">這個版本的 App 沒有附外掛，無法安裝。</div>
+          <div className="verdict verdict-bad">{t("這個版本的 App 沒有附外掛，無法安裝。")}</div>
         ) : (
           <>
             <dl className="stats">
               <div>
-                <dt>OBS 目前使用</dt>
-                <dd>{loadedVersion ?? (obsConnected ? "沒有載入" : "—")}</dd>
+                <dt>{t("直播軟體目前使用")}</dt>
+                <dd>{loadedVersion ?? (obsConnected ? t("沒有載入") : "—")}</dd>
               </div>
               <div>
-                <dt>已安裝的檔案</dt>
-                <dd>{status.installed ? (status.installedVersion ?? "版本不明") : "沒有安裝"}</dd>
+                <dt>{t("已安裝的檔案")}</dt>
+                <dd>{status.installed ? (status.installedVersion ?? t("版本不明")) : t("沒有安裝")}</dd>
               </div>
               <div>
-                <dt>新版本</dt>
+                <dt>{t("新版本")}</dt>
                 <dd>{bundled}</dd>
               </div>
             </dl>
 
             {finished ? (
-              <div className="verdict verdict-ok">外掛 {loadedVersion} 已經在 OBS 裡啟用，可以使用試音了。</div>
+              <div className="verdict verdict-ok">{t("外掛 {version} 已經在直播軟體裡啟用，可以使用試音了。", { version: loadedVersion ?? "" })}</div>
             ) : (
               <ol className="steps">
-                <Step n={1} title="關閉 OBS" state={closeStep}>
-                  <p className="hint">安裝外掛時 OBS 必須關閉。請你自己關閉 OBS，這樣可以先結束直播、存好設定。關閉後這裡會自動往下一步。</p>
+                <Step n={1} title={t("關閉直播軟體")} state={closeStep}>
+                  <p className="hint">{t("安裝外掛時直播軟體必須關閉。請你自己關閉它，這樣可以先結束直播、存好設定。關閉後這裡會自動往下一步。")}</p>
                   {(outputs.streaming || outputs.recording) && (
                     <div className="verdict verdict-bad">
-                      OBS 正在{outputs.streaming && outputs.recording ? "直播和錄影" : outputs.streaming ? "直播" : "錄影"}，請先結束再關閉 OBS。
+                      {t("直播軟體正在{what}，請先結束再關閉直播軟體。", {
+                        what: outputs.streaming && outputs.recording ? t("直播和錄影") : outputs.streaming ? t("直播") : t("錄影"),
+                      })}
                     </div>
                   )}
-                  <div className="waiting">等待 OBS 關閉…</div>
+                  <div className="waiting">{t("等待直播軟體關閉…")}</div>
                 </Step>
 
-                <Step n={2} title={`安裝外掛 ${bundled}`} state={installStep}>
+                <Step n={2} title={t("安裝外掛 {version}", { version: bundled })} state={installStep}>
                   {install.kind === "error" && install.error.kind === "permissionDenied" ? (
                     <>
                       <div className="verdict verdict-warn">{install.error.message}</div>
-                      <p className="hint">按下面的按鈕後，Windows 會跳出視窗詢問是否允許，請按「是」。</p>
+                      <p className="hint">{t("按下面的按鈕後，Windows 會跳出視窗詢問是否允許，請按「是」。")}</p>
                       <button type="button" className="btn primary" onClick={() => run("install_plugin_elevated")}>
-                        用系統管理員權限安裝
+                        {t("用系統管理員權限安裝")}
                       </button>
                     </>
                   ) : (
@@ -161,33 +164,33 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
                         disabled={install.kind === "installing" || status.obsRunning}
                         onClick={() => run("install_plugin")}
                       >
-                        {install.kind === "installing" ? "安裝中…" : install.kind === "error" ? "再試一次" : "安裝"}
+                        {install.kind === "installing" ? t("安裝中…") : install.kind === "error" ? t("再試一次") : t("安裝")}
                       </button>
                     </>
                   )}
                 </Step>
 
-                <Step n={3} title="重新開啟 OBS" state={openStep}>
+                <Step n={3} title={t("重新開啟直播軟體")} state={openStep}>
                   {!status.obsRunning ? (
                     <>
-                      <p className="hint">OBS 開啟時才會載入新外掛。</p>
+                      <p className="hint">{t("直播軟體開啟時才會載入新外掛。")}</p>
                       <button type="button" className="btn primary" onClick={launch}>
-                        開啟 OBS
+                        {t("開啟直播軟體")}
                       </button>
-                      {launching && <div className="verdict verdict-bad">{launching}，請自己開啟 OBS。</div>}
+                      {launching && <div className="verdict verdict-bad">{t("{error}，請自己開啟直播軟體。", { error: launching })}</div>}
                     </>
                   ) : !obsConnected ? (
-                    <div className="waiting">OBS 啟動中，等待連線…</div>
+                    <div className="waiting">{t("直播軟體啟動中，等待連線…")}</div>
                   ) : loadedVersion ? (
                     <div className="verdict verdict-warn">
-                      OBS 載入的還是舊版 {loadedVersion}。OBS 可能是在安裝前就開著的，請關閉 OBS 再重新開啟。
+                      {t("直播軟體載入的還是舊版 {version}。它可能是在安裝前就開著的，請關閉直播軟體再重新開啟。", { version: loadedVersion })}
                     </div>
                   ) : status.enabledInPluginManager === false ? (
                     <div className="verdict verdict-warn">
-                      外掛在 OBS 裡被停用了。請到 OBS 的「工具 → 外掛程式管理員」勾選 obs-audio-kit，再重新開啟 OBS。
+                      {t("外掛在 {app} 裡被停用了。請到 {app} 的「工具 → 外掛程式管理員」勾選 SoundCheck，再重新開啟 {app}。")}
                     </div>
                   ) : (
-                    <div className="waiting">等待 OBS 載入外掛…如果一直停在這裡，請關閉 OBS 再重新開啟。</div>
+                    <div className="waiting">{t("等待直播軟體載入外掛…如果一直停在這裡，請關閉直播軟體再重新開啟。")}</div>
                   )}
                 </Step>
               </ol>

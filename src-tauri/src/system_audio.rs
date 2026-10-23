@@ -76,7 +76,7 @@ fn listen_stop() {
 
 #[cfg(not(target_os = "windows"))]
 fn listen_start(_id: String) -> Result<(), String> {
-    Err("這個平台還不支援試聽音量".into())
+    Err(crate::i18n::tr("這個平台還不支援試聽音量"))
 }
 
 #[cfg(target_os = "windows")]
@@ -89,8 +89,8 @@ fn listen_start(id: String) -> Result<(), String> {
     std::thread::spawn(move || win::listen(&id, &thread_stop, ready));
     opened
         .recv()
-        .map_err(|_| "試聽失敗".to_string())?
-        .map_err(|e| format!("無法開啟這個裝置：{e}"))?;
+        .map_err(|_| crate::i18n::tr("試聽失敗"))?
+        .map_err(|e| crate::i18n::trf("無法開啟這個裝置：{e}", &[("e", &e)]))?;
     *LISTENING.lock().unwrap() = Some(stop);
     Ok(())
 }
@@ -107,7 +107,7 @@ fn snapshot() -> Result<SystemAudio, String> {
 
 #[cfg(target_os = "windows")]
 fn snapshot() -> Result<SystemAudio, String> {
-    win::snapshot().map_err(|e| format!("讀取系統聲音失敗：{e}"))
+    win::snapshot().map_err(|e| crate::i18n::trf("讀取系統聲音失敗：{e}", &[("e", &e)]))
 }
 
 #[cfg(target_os = "windows")]

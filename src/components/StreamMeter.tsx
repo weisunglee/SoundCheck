@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { loudnessVerdict, toDb } from "../loudnessVerdict";
 import type { StreamLevel } from "../streamTap";
 import type { AudioSource } from "../types";
+import { t } from "../i18n";
 
 interface Props {
   level: StreamLevel | null;
@@ -44,19 +45,19 @@ export function StreamMeter({ level, running, pluginLoaded, streamPaused, source
   return (
     <section className="stream-meter">
       <div className="stream-meter-head">
-        <h4 className="section-title">觀眾聽到的（直播送出的聲音）</h4>
+        <h4 className="section-title">{t("觀眾聽到的（直播送出的聲音）")}</h4>
         {level?.shortTermLufs != null && <span className="lufs">{level.shortTermLufs.toFixed(0)} LUFS</span>}
       </div>
 
       {!pluginLoaded ? (
         <p className="hint">
-          要看到觀眾真正聽到的音量，需要安裝 OBS 外掛。
+          {t("要看到觀眾真正聽到的音量，需要在直播軟體安裝外掛。")}
           <button type="button" className="link" onClick={onInstallPlugin}>
-            安裝外掛
+            {t("安裝外掛")}
           </button>
         </p>
       ) : !running ? (
-        <p className="hint">正在接上直播的聲音…</p>
+        <p className="hint">{t("正在接上直播的聲音…")}</p>
       ) : (
         <>
           <div className="hmeters">
@@ -68,7 +69,7 @@ export function StreamMeter({ level, running, pluginLoaded, streamPaused, source
             ))}
           </div>
           {streamPaused ? (
-            <p className="hint">試音播放中，直播聲音暫停。</p>
+            <p className="hint">{t("試音播放中，直播聲音暫停。")}</p>
           ) : (
             verdict && <p className={`stream-verdict stream-verdict-${verdict.tone}`}>{verdict.text}</p>
           )}
@@ -77,8 +78,8 @@ export function StreamMeter({ level, running, pluginLoaded, streamPaused, source
 
       <p className="hint">
         {monitored.length === 0
-          ? "你的耳機目前不會從 OBS 聽到任何來源。"
-          : `你的耳機會從 OBS 聽到：${monitored.join("、")}。這是 OBS 的監聽，不是直播的混音；想聽觀眾聽到的，用「試音」。`}
+          ? t("你的耳機目前不會從直播軟體聽到任何來源。")
+          : t("你的耳機會從直播軟體聽到：{list}。這是直播軟體的監聽，不是直播的混音；想聽觀眾聽到的，用「試音」。", { list: monitored.join(t("、")) })}
       </p>
     </section>
   );

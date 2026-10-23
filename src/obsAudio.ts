@@ -2,7 +2,10 @@
 import type { RequestBatchRequest } from "obs-websocket-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { obs, pluginRequest } from "./obs";
+import { CAPABILITIES, type Capabilities } from "./software";
+import { CAPTURE_KIND_SET } from "./systemAudio";
 import type { AudioSource, ChannelLevels, Filter, MonitorType, Scene, SceneItem } from "./types";
+import { msg, t } from "./i18n";
 
 export interface ObsAudioState {
   sources: AudioSource[];
@@ -11,31 +14,31 @@ export interface ObsAudioState {
   sceneOrder: string[];
   programScene: string;
   streamTracks: number[];
-  /** False when the obs-audio-kit plugin isn't loaded; stream tracks then fall back to track 1. */
+  /** False when the SoundCheck plugin isn't loaded; stream tracks then fall back to track 1. */
   pluginAvailable: boolean;
   /** Version of the plugin OBS has loaded, or null when it isn't loaded. */
   pluginVersion: string | null;
 }
 
-/** Names users see for OBS input kinds, per platform. */
-const INPUT_KIND_LABELS: Record<string, string> = {
-  wasapi_input_capture: "音訊輸入擷取",
-  wasapi_output_capture: "音訊輸出擷取",
-  wasapi_process_output_capture: "應用程式音訊擷取",
-  coreaudio_input_capture: "音訊輸入擷取",
-  coreaudio_output_capture: "音訊輸出擷取",
-  sck_audio_capture: "macOS 音訊擷取",
-  pulse_input_capture: "音訊輸入擷取",
-  pulse_output_capture: "音訊輸出擷取",
-  ffmpeg_source: "媒體來源",
-  vlc_source: "VLC 影片來源",
-  browser_source: "瀏覽器來源",
-  dshow_input: "視訊擷取裝置",
-  av_capture_input: "視訊擷取裝置",
-  game_capture: "遊戲擷取",
-  window_capture: "視窗擷取",
-  screen_capture: "螢幕擷取",
-  ndi_source: "NDI 來源",
+/** Names users see for OBS input kinds, per platform (translated where shown). */
+export const INPUT_KIND_LABELS: Record<string, string> = {
+  wasapi_input_capture: msg("音訊輸入擷取"),
+  wasapi_output_capture: msg("音訊輸出擷取"),
+  wasapi_process_output_capture: msg("應用程式音訊擷取"),
+  coreaudio_input_capture: msg("音訊輸入擷取"),
+  coreaudio_output_capture: msg("音訊輸出擷取"),
+  sck_audio_capture: msg("macOS 音訊擷取"),
+  pulse_input_capture: msg("音訊輸入擷取"),
+  pulse_output_capture: msg("音訊輸出擷取"),
+  ffmpeg_source: msg("媒體來源"),
+  vlc_source: msg("VLC 影片來源"),
+  browser_source: msg("瀏覽器來源"),
+  dshow_input: msg("視訊擷取裝置"),
+  av_capture_input: msg("視訊擷取裝置"),
+  game_capture: msg("遊戲擷取"),
+  window_capture: msg("視窗擷取"),
+  screen_capture: msg("螢幕擷取"),
+  ndi_source: msg("NDI 來源"),
 };
 
 /** Filter kinds that process audio; other filters on a source (chroma key, crop…) are left out. */
@@ -191,7 +194,15 @@ export async function loadState(): Promise<ObsAudioState> {
   };
 }
 
-export interface ObsAudio {
+export type CaptureSettings = Map<string, { kind: string; settings: Record<string, any> }>;
+
+/**
+ * Everything the UI needs from the streaming software, implemented for OBS here and for
+ * Streamlabs in streamlabsAudio.ts. Setters a software doesn't support do nothing, and
+ * `capabilities` tells the UI to hide them.
+ */
+export interface AudioBackend {
+  capabilities: Capabilities;
   state: ObsAudioState | null;
   levels: Record<string, ChannelLevels>;
   /** Pre-fader input peak per source in dBFS (absent while silent), for filter tuning. */
@@ -206,10 +217,16 @@ export interface ObsAudio {
   addStreamTracks: (name: string) => void;
   showInProgram: (items: { sceneName: string; item: SceneItem }[]) => void;
   switchScene: (scene: string) => void;
+  /** Input kinds (unversioned) the software can create. */
+  listInputKinds: () => Promise<Set<string>>;
+  /** Creates an input and adds it to each of `scenes` (the first one creates it). */
+  createSource: (name: string, kind: string, settings: Record<string, string | number>, scenes: string[]) => Promise<void>;
+  /** Settings of inputs that capture a device or app, keyed by source name. */
+  captureSettings: (sources: AudioSource[]) => Promise<CaptureSettings>;
 }
 
 /** Loads the audio state once connected and keeps it live; every setter writes to OBS. */
-export function useObsAudio(connected: boolean): ObsAudio {
+export function useObsAudio(connected: boolean): AudioBackend {
   const [state, setState] = useState<ObsAudioState | null>(null);
   const [levels, setLevels] = useState<Record<string, ChannelLevels>>({});
   const [inputDb, setInputDb] = useState<Record<string, number>>({});
@@ -221,7 +238,7 @@ export function useObsAudio(connected: boolean): ObsAudio {
     reloadTimer.current = setTimeout(() => {
       loadState()
         .then((s) => (setState(s), setError(null)))
-        .catch((e: Error) => setError(`讀取 OBS 狀態失敗：${e.message}`));
+        .catch((e: Error) => setError(t("讀取直播軟體狀態失敗：{error}", { error: e.message })));
     }, RELOAD_DEBOUNCE_MS);
   }, []);
 
@@ -301,9 +318,10 @@ export function useObsAudio(connected: boolean): ObsAudio {
   }, [connected, reload, patchSource]);
 
   // Each setter updates the UI right away; the matching OBS event confirms it.
-  const send = (p: Promise<unknown>) => p.catch((e: Error) => setError(`OBS 沒有接受這個變更：${e.message}`));
+  const send = (p: Promise<unknown>) => p.catch((e: Error) => setError(t("直播軟體沒有接受這個變更：{error}", { error: e.message })));
 
   return {
+    capabilities: CAPABILITIES.obs,
     state,
     levels,
     inputDb,
@@ -342,12 +360,33 @@ export function useObsAudio(connected: boolean): ObsAudio {
     },
     showInProgram: (items) => {
       for (const { sceneName, item } of items) {
-        send(obs.call("SetSceneItemEnabled", { sceneName, sceneItemId: item.id, sceneItemEnabled: true }));
+        send(obs.call("SetSceneItemEnabled", { sceneName, sceneItemId: Number(item.id), sceneItemEnabled: true }));
       }
     },
     switchScene: (sceneName) => {
       setState((prev) => prev && { ...prev, programScene: sceneName });
       send(obs.call("SetCurrentProgramScene", { sceneName }));
+    },
+    listInputKinds: async () => new Set((await obs.call("GetInputKindList", { unversioned: true })).inputKinds as string[]),
+    createSource: async (inputName, inputKind, inputSettings, scenes) => {
+      await obs.call("CreateInput", { sceneName: scenes[0], inputName, inputKind, inputSettings, sceneItemEnabled: true });
+      for (const sceneName of scenes.slice(1)) {
+        await obs.call("CreateSceneItem", { sceneName, sourceName: inputName, sceneItemEnabled: true });
+      }
+    },
+    captureSettings: async (sources) => {
+      const result: CaptureSettings = new Map();
+      await Promise.all(
+        sources
+          .filter((s) => CAPTURE_KIND_SET.has(s.inputKind))
+          .map((s) =>
+            obs
+              .call("GetInputSettings", { inputName: s.name })
+              .then((r) => result.set(s.name, { kind: s.inputKind, settings: r.inputSettings as Record<string, any> }))
+              .catch(() => {}),
+          ),
+      );
+      return result;
     },
   };
 }

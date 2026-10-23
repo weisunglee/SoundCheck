@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 interface Props {
   scenes: string[];
   programScene: string;
@@ -8,8 +10,8 @@ interface Props {
 
 export function SceneList({ scenes, programScene, heardCount, onSwitch }: Props) {
   return (
-    <nav className="scenes" aria-label="場景">
-      <div className="cap">場景</div>
+    <nav className="scenes" aria-label={t("場景")}>
+      <div className="cap">{t("場景")}</div>
       {scenes.map((name) => {
         const current = name === programScene;
         return (
@@ -22,7 +24,7 @@ export function SceneList({ scenes, programScene, heardCount, onSwitch }: Props)
           >
             <span className="scene-name">{name}</span>
             <span className="scene-meta">
-              {current ? <span className="onair">直播中</span> : `${heardCount[name] ?? 0} 個聲音`}
+              {current ? <span className="onair">{t("直播中")}</span> : t("{n} 個聲音", { n: heardCount[name] ?? 0 })}
             </span>
           </button>
         );

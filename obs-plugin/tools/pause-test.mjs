@@ -11,7 +11,7 @@ const obs = new OBSWebSocket();
 await obs.connect(`ws://127.0.0.1:${config.server_port}`, config.auth_required ? config.server_password : undefined);
 
 const vendor = (requestType, requestData = {}) =>
-  obs.call("CallVendorRequest", { vendorName: "obs-audio-kit", requestType, requestData }).then((r) => r.responseData);
+  obs.call("CallVendorRequest", { vendorName: "soundcheck", requestType, requestData }).then((r) => r.responseData);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 if ((await obs.call("GetStreamStatus")).outputActive) {

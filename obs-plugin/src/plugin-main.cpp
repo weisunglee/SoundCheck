@@ -8,10 +8,10 @@
 
 OBS_DECLARE_MODULE()
 
-extern "C" const char *obs_module_name(void) { return "obs-audio-kit"; }
+extern "C" const char *obs_module_name(void) { return "SoundCheck"; }
 extern "C" const char *obs_module_description(void)
 {
-    return "Companion for the obs-audio-kit app: lets it listen to the stream mix.";
+    return "Companion for the SoundCheck app: lets it listen to the stream mix.";
 }
 
 static Tap g_tap;
@@ -111,20 +111,20 @@ static void on_frontend_event(enum obs_frontend_event event, void *)
 bool obs_module_load(void)
 {
     if (!tap_sockets_init()) {
-        blog(LOG_ERROR, "[obs-audio-kit] socket setup failed");
+        blog(LOG_ERROR, "[soundcheck] socket setup failed");
         return false;
     }
     obs_frontend_add_event_callback(on_frontend_event, nullptr);
-    blog(LOG_INFO, "[obs-audio-kit] module loaded (version %s)", PLUGIN_VERSION);
+    blog(LOG_INFO, "[soundcheck] module loaded (version %s)", PLUGIN_VERSION);
     return true;
 }
 
 // obs-websocket registers its vendor API during load, so vendors attach after all modules load.
 void obs_module_post_load(void)
 {
-    g_vendor = obs_websocket_register_vendor("obs-audio-kit");
+    g_vendor = obs_websocket_register_vendor("soundcheck");
     if (!g_vendor) {
-        blog(LOG_WARNING, "[obs-audio-kit] obs-websocket not available; app control disabled");
+        blog(LOG_WARNING, "[soundcheck] obs-websocket not available; app control disabled");
         return;
     }
     obs_websocket_vendor_register_request(g_vendor, "GetInfo", handle_get_info, nullptr);
@@ -141,5 +141,5 @@ void obs_module_unload(void)
     g_pause.resume();
     g_tap.stop();
     tap_sockets_shutdown();
-    blog(LOG_INFO, "[obs-audio-kit] module unloaded");
+    blog(LOG_INFO, "[soundcheck] module unloaded");
 }

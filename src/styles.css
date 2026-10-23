@@ -183,6 +183,15 @@ input {
   position: relative;
 }
 
+.meters.no-meter .meter,
+.meters.no-meter .range-band {
+  opacity: 0.25;
+}
+
+.notice-inline {
+  margin: 0;
+}
+
 .range-band {
   position: absolute;
   left: -3px;

@@ -1,8 +1,27 @@
-# obs-audio-kit
+<p align="center"><img src="src-tauri/icons/128x128.png" alt="SoundCheck" width="96"></p>
 
-跨平台的視覺化 OBS 聲音設定工具，給不熟 OBS 的實況主用。OBS 的設定項目太多、太分散，這個工具只處理聲音。
+# SoundCheck
 
-## 要解決的問題
+給實況主用的聲音工具：開播前試音、直播中看觀眾到底聽到什麼，並用白話把直播軟體的聲音設定好。直播軟體的設定項目太多、太分散，SoundCheck 只處理聲音。
+
+- **支援的直播軟體**：
+  - **OBS Studio 28 以上**：全部功能（透過內建的 obs-websocket 連線）。
+  - **Streamlabs Desktop**：精簡版。透過它的本機 API（Windows 的 named pipe `\\.\pipe\slobs`、macOS 的 `slobs.sock`）連線，本機連線免 Token。可以調音量、靜音、切換場景、顯示來源、看來源狀態和新增來源；它的 API 沒有濾鏡和音量表、監聽／音軌／同步偏移只能讀不能改，也不載入第三方 OBS 外掛，所以濾鏡精靈、試音、實況輸出音量表、設定檔在 Streamlabs 上會自動隱藏。
+  - 右上角可以選「自動偵測」（有開哪個就連哪個，兩個都開時優先 OBS）、OBS 或 Streamlabs。介面一般用「直播軟體」稱呼，只有教學步驟用 `{app}` 帶出軟體名稱。
+- **介面語言**：繁體中文、简体中文、English、日本語、한국어，可在右上角切換，第一次開啟會跟著系統語言。
+- **平台**：Windows（主要測試平台）、macOS、Linux。系統聲音偵測和應用程式擷取目前只支援 Windows。
+
+## 使用方式
+
+1. 開啟直播軟體，在 OBS 的「工具 → WebSocket 伺服器設定」勾選「啟用 WebSocket 伺服器」。SoundCheck 會自動讀取連接埠和密碼，不用手動輸入。
+2. 開啟 SoundCheck。連不上時畫面會依原因一步一步說明。
+3. 想用試音和「觀眾聽到的」音量表，按右上角的「安裝外掛」。安裝時需要你自己關閉直播軟體，裝好後 SoundCheck 會幫你重新開啟並確認外掛已載入。
+
+## 設計說明
+
+以下是開發時的設計和驗證紀錄。
+
+### 要解決的問題
 
 1. **不知道音量該怎麼調**：OBS 只給一根推桿和 dB 數字，使用者不知道多少才算剛好、太小或爆音。
 2. **不知道觀眾聽到多大聲**：使用者看不到實況實際送出去的聲音有多大聲。
@@ -12,7 +31,7 @@
 6. **濾鏡難懂又難設定**：OBS 的濾鏡介面不直覺，而且很多人不知道噪音閘、壓縮器這些濾鏡是做什麼用的。
 7. **第一次連線門檻高**：要先在 OBS 開啟 WebSocket 伺服器，再填 IP、連接埠和密碼，新手常常卡在這一步。
 
-## 功能目標
+### 功能目標
 
 | 功能 | 解決的問題 |
 |---|---|
@@ -29,7 +48,7 @@
 | **快速調整**：音量、靜音、聲道平衡、同步偏移 | 1 |
 | **設定檔**：儲存和載入整套聲音設定 | — |
 
-### 來源狀態
+#### 來源狀態
 
 OBS 的音量和濾鏡屬於音訊來源本身，不屬於場景；同一個來源放在多個場景時，設定是共用的。所以這個工具不做「每個場景各自的音量」，而是抓出所有場景用到的音訊來源，告訴使用者每個來源在**目前場景**的狀態：
 
@@ -47,7 +66,7 @@ OBS 的音量和濾鏡屬於音訊來源本身，不屬於場景；同一個來�
 
 目前場景的來源排成**一個位置固定的清單**（全域來源在前，其他照 OBS 的順序），狀態只改變卡片的樣子（觀眾聽不到的會淡化並加虛線框），不會因為按了靜音或改了監聽就移到別的區塊，所以同一個位置再按一次就能切回來。上方摘要列出觀眾聽不到和目前沒聲音的來源，點一下會捲到那張卡片並閃一下。
 
-### 各功能的做法
+#### 各功能的做法
 
 - **連線引導**（`src/components/ConnectionGuide.tsx`）：連線失敗時依原因（沒有 OBS 設定檔、WebSocket 伺服器沒開、密碼不對、連不上連接埠、OBS 沒開）顯示對應的步驟；讀不到設定檔時可以手動輸入 IP、連接埠和密碼（存在 App 裡），也能改回自動讀取。
 - **音量表建議範圍**：每個來源的音量表標出 -20～-9 dB（OBS 自己音量表的黃色區），峰值落在這裡最好。
@@ -58,19 +77,21 @@ OBS 的音量和濾鏡屬於音訊來源本身，不屬於場景；同一個來�
 - **濾鏡精靈**（`src/components/FilterWizard.tsx`、`src/filters.ts`）：從問題選擇（背景有雜音、不說話時還有聲音、音量忽大忽小、大叫會爆音、整體太小聲，或一次設定好人聲）新增濾鏡，並自動放到建議的順序（噪音抑制 → 噪音閘 → 壓縮器 → 增益 → 限制器）。每個濾鏡附白話說明；噪音閘和限制器的門檻畫在即時音量條上，壓縮器畫出輸入／輸出曲線。
 - **設定檔**（`src/profiles.ts`、`src-tauri/src/profiles.rs`）：把每個音訊來源的音量、靜音、監聽、平衡、提早延後、音軌和聲音濾鏡（含設定和順序）存成 JSON。套用前自動把目前的設定存成「套用前的備份＋時間」（保留最近 5 份）；設定檔裡沒有的濾鏡保留不動，在 OBS 改過名字的同種濾鏡會沿用並改回設定檔裡的名字，OBS 裡找不到的來源略過並列出；在別的場景集合存的設定檔，套用前會提醒。
 
-### 目前的限制
+#### 目前的限制
 
 - 手動輸入其他電腦的 OBS 時，混音器、濾鏡精靈、設定檔可以用；試音、實況輸出音量表、外掛安裝、系統聲音偵測和應用程式擷取只對本機的 OBS 有效，連到其他電腦時會自動隱藏或停用。
 - 濾鏡精靈裡的即時音量條量的是經過所有濾鏡之後的聲音（OBS 音量表的量法），所以噪音閘關上時音量條會掉到底。
 - OBS 32 的噪音抑制只剩 RNNoise 和 Speex；NVIDIA 降噪在 OBS 裡是另外的濾鏡，精靈只顯示不調整。
 - 系統聲音偵測和應用程式擷取目前只支援 Windows；macOS 的新增來源精靈只提供「跟著系統預設」的裝置。
 
-## 直播監聽（OBS 外掛）
+### 直播監聽（OBS 外掛）
+
+外掛在 OBS 的外掛管理員裡顯示為「SoundCheck」，檔名是 `soundcheck`，obs-websocket 的 vendor 名稱也是 `soundcheck`。專案原名 obs-audio-kit；安裝新版外掛時會一併移除舊的 `obs-audio-kit` 外掛，App 第一次啟動時也會把舊 App ID（`io.github.weisunglee.obsaudiokit`）存的設定檔搬過來。
 
 obs-websocket 拿不到 OBS 混好的直播聲音，所以需要一個小型 OBS 外掛（`obs-plugin/`，C++，沿用 obs-live-translate 的建置方式）。外掛只負責「接出聲音」，播放和分析都在本工具裡做：
 
 ```
-OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線──▶ obs-audio-kit ──▶ 耳機
+OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線──▶ SoundCheck ──▶ 耳機
                                                     └─▶ 直播音量表、響度
 ```
 
@@ -82,7 +103,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 外掛只「讀」音軌，不新增音軌、來源或濾鏡，也不會把任何聲音放回 OBS 的混音。唯一會改動 OBS 設定的是試音：播放期間暫時取消勾選直播音軌，結束後還原。外掛在 OBS 裡沒有任何介面；OBS 啟動時自動載入，平常不做事，只有本工具要求時才接出聲音。
 
-### 試音
+#### 試音
 
 做法和一般軟體的麥克風測試一樣：先錄一段，再播放。錄音和播放不會同時進行，所以不管使用者用哪個裝置聽，都不會有回音。
 
@@ -92,7 +113,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 **安全機制**：如果本工具在播放中當掉或斷線，音軌沒還原，直播就會一直沒聲音。所以取消勾選和還原由外掛負責，本工具在播放期間定期發送心跳；外掛超過幾秒沒收到心跳就自動還原。OBS 關閉前也要還原。
 
-### 一鍵安裝
+#### 一鍵安裝
 
 外掛的二進位檔打包在本工具裡，不另外下載（Windows 由 `src-tauri/tauri.windows.conf.json` 把建置好的 DLL 放進 App 資源）。只有 App 附的版本比 OBS 載入的（或已安裝檔案的）版本新時，才會提示安裝或更新；版本號以 `obs-plugin/buildspec.json` 為準。安裝流程：
 
@@ -103,23 +124,23 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 | 平台 | 外掛資料夾 | 需要系統管理員權限 |
 |---|---|---|
-| Windows | `C:\ProgramData\obs-studio\plugins\obs-audio-kit\bin\64bit\` | 待確認 |
-| macOS | `~/Library/Application Support/obs-studio/plugins/obs-audio-kit.plugin` | 不需要 |
-| Linux | `~/.config/obs-studio/plugins/obs-audio-kit/bin/64bit/` | 不需要（Flatpak 版 OBS 不支援） |
+| Windows | `C:\ProgramData\obs-studio\plugins\soundcheck\bin\64bit\` | 不需要（見驗證紀錄） |
+| macOS | `~/Library/Application Support/obs-studio/plugins/soundcheck.plugin` | 不需要 |
+| Linux | `~/.config/obs-studio/plugins/soundcheck/bin/64bit/` | 不需要（Flatpak 版 OBS 不支援） |
 
 安裝的每一步（安裝視窗顯示的狀態、使用者按的按鈕、複製結果、系統管理員權限複製的輸出）都會寫進安裝紀錄 `install.log`：
 
 | 平台 | 位置 |
 |---|---|
-| Windows | `%LOCALAPPDATA%\io.github.weisunglee.obsaudiokit\logs\install.log` |
-| macOS | `~/Library/Logs/io.github.weisunglee.obsaudiokit/install.log` |
-| Linux | `~/.local/share/io.github.weisunglee.obsaudiokit/logs/install.log` |
+| Windows | `%LOCALAPPDATA%\io.github.weisunglee.soundcheck\logs\install.log` |
+| macOS | `~/Library/Logs/io.github.weisunglee.soundcheck/install.log` |
+| Linux | `~/.local/share/io.github.weisunglee.soundcheck/logs/install.log` |
 
-### 驗證紀錄
+#### 驗證紀錄
 
 在 Windows 11（OBS 32.2.2）上驗證過，外掛以 OBS 31.1.1 原始碼建置：
 
-- **外掛載入**：放進 `C:\ProgramData\obs-studio\plugins\obs-audio-kit\bin\64bit\` 後重開 OBS 即可載入，log 有 `[obs-audio-kit] module loaded`
+- **外掛載入**（改名前的紀錄，當時叫 obs-audio-kit）：放進 `C:\ProgramData\obs-studio\plugins\obs-audio-kit\bin\64bit\` 後重開 OBS 即可載入，log 有 `[obs-audio-kit] module loaded`
 - **OBS 32 外掛管理員**：新外掛自動加入 `plugin_manager\modules.json`，預設 `enabled=true`，使用者不需要手動啟用
 - **接出直播音軌**：`StartTap` 接出音軌 1，15 秒收到 15.00 秒音訊（實際耗時 15.01–15.02 秒），沒有掉資料；錄到的峰值和 OBS 自己的音量表一致（-14.8 dBFS 對 -14.8 dBFS）
 - **直播用哪條音軌**：沒在直播時，從進階模式的設定（`AdvOut` / `TrackIndex`）正確讀到音軌 1
@@ -134,8 +155,9 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 - **固定位置的混音器與輸入裝置**：使用者確認連按靜音時卡片不會移位、摘要標籤能捲到對應卡片、「還沒加進 OBS 的輸入裝置」清單正確、新增精靈的試聽能顯示麥克風音量；`print_listen_levels` 測試確認開啟錄音裝置後 Windows 會回報音量（例如 Audient iD4 Mic 0.022）
 - **Windows 資料夾權限**：`C:\ProgramData\obs-studio\plugins` 的 ACL 讓一般使用者可以新建資料夾，且對自己建的資料夾有完整權限，推論全新安裝不需要 UAC。但如果資料夾是用提權方式建的（擁有者變成 Administrators），之後一般權限就無法更新或刪除，所以**安裝程式必須一律用一般權限安裝**，不能有時提權有時不提權
 
-### 待驗證
+#### 待驗證
 
+- Streamlabs Desktop 連接層（連線、讀取場景與來源、音量 dB 與 deflection 的換算、靜音、切換場景、顯示來源、新增來源）在實際的 Streamlabs 上測試
 - OBS 改了 WebSocket 連接埠或密碼後，App 是否會自動用新設定重連（每次連線都會重新讀設定檔，但還沒實測）
 - 直播中時，從直播輸出的 mixer mask 讀取直播音軌（`streamTracksOrigin: "output"`）
 - 簡易輸出模式下的直播音軌判斷
@@ -146,7 +168,13 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 - 試音結果的判斷門檻（偏小 < -24 LUFS、偏大 > -10 LUFS，以 YouTube 的 -14 LUFS 為參考）目前是暫定值，要用更多實際錄音調整
 - **已知風險**：暫停期間如果 OBS 剛好自動儲存場景集合，又在幾秒內當掉，下次開 OBS 時部分來源可能仍未勾選直播音軌。正常關閉 OBS 或 App 都會先還原
 
-## 技術架構
+### 直播軟體連接層
+
+`src/obsAudio.ts` 定義介面 `AudioBackend`（狀態、各種設定的操作、新增來源、讀取擷取設定），OBS 的實作在同一檔，Streamlabs 的實作在 `src/streamlabsAudio.ts`。每個軟體在 `src/software.ts` 宣告自己能做什麼（`Capabilities`），介面依此隱藏不支援的功能。Streamlabs 的 JSON-RPC 用戶端在 `src/streamlabs.ts`，傳輸由 Rust 的 `src-tauri/src/slobs.rs` 負責（tokio 的 named pipe／Unix socket）；`src-tauri/src/presence.rs` 每秒偵測兩個軟體是否在執行、是否可以連線。
+
+Streamlabs 的音量用 libobs 的 IEC 推桿曲線（deflection 0～1 對應 -60～0 dB），所以 SoundCheck 設定音量時先把 dB 換成 deflection。它沒有推桿和靜音的變更事件，所以每秒輪詢一次音訊來源；場景和來源的結構變更有事件可以訂閱。
+
+### 技術架構
 
 - **桌面框架**：Tauri 2 + React + TypeScript + Vite（與 noalbsgui 相同）
 - **連線 OBS**：前端用 `obs-websocket-js` 直接連 obs-websocket v5（OBS 28 以後內建）
@@ -167,6 +195,13 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 npm install
 npm run tauri dev     # 開發模式，啟動桌面視窗
 npm run tauri build   # 打包安裝檔
+npm run check:i18n    # 檢查每種語言都翻譯了所有介面文字
 ```
+
+### 語言
+
+介面文字在程式碼裡寫繁體中文，用 `t("…")` 包起來；其他語言的翻譯在 `src/locales/`，以繁體中文原文為鍵（gettext 的做法）。新增或修改文字後執行 `npm run check:i18n`，它會列出缺少的翻譯、沒在用的翻譯，以及 `{變數}` 對不上的地方。存在資料裡、之後才顯示的文字用 `msg("…")` 標記，顯示時再 `t(value)`。
+
+一般文字用「直播軟體」稱呼，只有需要點特定選單的步驟才用 `{app}` 帶出軟體名稱（`src/i18n.tsx` 的 `setSoftwareName`）。後端（Rust）產生的訊息在 `src-tauri/src/i18n.rs`，介面切換語言時會一起切換。
 
 App 啟動後會自動讀取本機 OBS 的 WebSocket 設定並連線。`npx tsx tools/inspect-obs.ts` 可以在有 OBS 的電腦上印出 App 會看到的資料和各場景的來源狀態。

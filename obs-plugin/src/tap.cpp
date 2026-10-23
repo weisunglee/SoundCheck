@@ -76,7 +76,7 @@ uint16_t Tap::start(int track)
     thread_ = std::thread(&Tap::serve, this);
 
     uint16_t port = ntohs(addr.sin_port);
-    blog(LOG_INFO, "[obs-audio-kit] tap started on track %d, port %u", track, port);
+    blog(LOG_INFO, "[soundcheck] tap started on track %d, port %u", track, port);
     return port;
 }
 
@@ -98,7 +98,7 @@ void Tap::stop()
         queue_.clear();
     }
     running_ = false;
-    blog(LOG_INFO, "[obs-audio-kit] tap stopped");
+    blog(LOG_INFO, "[soundcheck] tap stopped");
 }
 
 void Tap::on_audio(void *param, size_t, audio_data *data)
@@ -139,7 +139,7 @@ void Tap::serve()
         return;
 
     client_connected_ = true;
-    blog(LOG_INFO, "[obs-audio-kit] tap client connected");
+    blog(LOG_INFO, "[soundcheck] tap client connected");
 
     while (!stopping_) {
         std::vector<float> block;
@@ -157,7 +157,7 @@ void Tap::serve()
         while (remaining > 0) {
             int sent = int(send(client_, bytes, int(remaining), 0));
             if (sent <= 0) {
-                blog(LOG_INFO, "[obs-audio-kit] tap client disconnected");
+                blog(LOG_INFO, "[soundcheck] tap client disconnected");
                 client_connected_ = false;
                 close_socket(client_);
                 return;

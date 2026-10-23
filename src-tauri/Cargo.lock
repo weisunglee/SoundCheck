@@ -2509,23 +2509,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "obs-audio-kit"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "cpal",
- "dirs 6.0.0",
- "pelite",
- "serde",
- "serde_json",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "windows 0.62.2",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3358,6 +3341,24 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "soundcheck"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "cpal",
+ "dirs 6.0.0",
+ "pelite",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "windows 0.62.2",
 ]
 
 [[package]]

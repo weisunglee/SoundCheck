@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    obs_audio_kit_lib::run()
+    soundcheck_lib::run()
 }

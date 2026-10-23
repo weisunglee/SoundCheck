@@ -6,7 +6,7 @@ fn main() {
     let spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(buildspec).expect("read buildspec.json")).expect("parse buildspec.json");
     let version = spec["version"].as_str().expect("buildspec.json has a version");
-    println!("cargo:rustc-env=OBS_AUDIO_KIT_PLUGIN_VERSION={version}");
+    println!("cargo:rustc-env=SOUNDCHECK_PLUGIN_VERSION={version}");
 
     tauri_build::build()
 }

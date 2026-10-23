@@ -33,13 +33,13 @@
     },
     "platformConfig": {
         "macos": {
-            "bundleId": "io.github.weisunglee.obs-audio-kit"
+            "bundleId": "io.github.weisunglee.soundcheck"
         }
     },
-    "name": "obs-audio-kit",
-    "displayName": "obs-audio-kit OBS companion",
-    "version": "0.2.0",
+    "name": "soundcheck",
+    "displayName": "SoundCheck",
+    "version": "0.3.0",
     "author": "weisunglee",
-    "website": "https://github.com/weisunglee/obs-audio-kit",
-    "email": "https://github.com/weisunglee/obs-audio-kit/issues"
+    "website": "https://github.com/weisunglee/SoundCheck",
+    "email": "https://github.com/weisunglee/SoundCheck/issues"
 }

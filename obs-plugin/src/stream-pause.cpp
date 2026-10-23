@@ -50,7 +50,7 @@ bool StreamPause::pause(const std::vector<int> &stream_tracks, int timeout_ms)
     timeout_ = std::chrono::milliseconds(timeout_ms);
     deadline_ = std::chrono::steady_clock::now() + timeout_;
     watchdog_ = std::thread(&StreamPause::watch, this);
-    blog(LOG_INFO, "[obs-audio-kit] stream audio paused (%zu sources, timeout %d ms)", saved_.size(), timeout_ms);
+    blog(LOG_INFO, "[soundcheck] stream audio paused (%zu sources, timeout %d ms)", saved_.size(), timeout_ms);
     return true;
 }
 
@@ -85,7 +85,7 @@ void StreamPause::watch()
     while (paused_) {
         if (wake_.wait_until(lock, deadline_) == std::cv_status::timeout &&
             std::chrono::steady_clock::now() >= deadline_ && paused_) {
-            blog(LOG_WARNING, "[obs-audio-kit] no heartbeat from the app; restoring stream audio");
+            blog(LOG_WARNING, "[soundcheck] no heartbeat from the app; restoring stream audio");
             restore_locked();
         }
     }
@@ -100,7 +100,7 @@ void StreamPause::restore_locked()
         }
         obs_weak_source_release(s.source);
     }
-    blog(LOG_INFO, "[obs-audio-kit] stream audio restored (%zu sources)", saved_.size());
+    blog(LOG_INFO, "[soundcheck] stream audio restored (%zu sources)", saved_.size());
     saved_.clear();
     paused_ = false;
 }

@@ -1,8 +1,6 @@
 // Sound playing on this computer, and whether OBS already captures it.
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { obs } from "./obs";
-import type { AudioSource } from "./types";
 
 export interface SystemDevice {
   id: string;
@@ -58,22 +56,9 @@ export const CAPTURE_KINDS = {
   app: ["wasapi_process_output_capture"],
 } as const;
 
-const CAPTURE_KIND_SET = new Set<string>([...CAPTURE_KINDS.input, ...CAPTURE_KINDS.output, ...CAPTURE_KINDS.app]);
+export const CAPTURE_KIND_SET = new Set<string>([...CAPTURE_KINDS.input, ...CAPTURE_KINDS.output, ...CAPTURE_KINDS.app]);
 
-/** The settings of every OBS input that captures a device or an app. */
-export async function loadCaptureSettings(sources: AudioSource[]): Promise<Map<string, { kind: string; settings: Record<string, any> }>> {
-  const captures = sources.filter((s) => CAPTURE_KIND_SET.has(s.inputKind));
-  const result = new Map<string, { kind: string; settings: Record<string, any> }>();
-  await Promise.all(
-    captures.map((s) =>
-      obs
-        .call("GetInputSettings", { inputName: s.name })
-        .then((r) => result.set(s.name, { kind: s.inputKind, settings: r.inputSettings as Record<string, any> }))
-        .catch(() => {}),
-    ),
-  );
-  return result;
-}
+type CaptureSettings = Map<string, { kind: string; settings: Record<string, any> }>;
 
 // OBS stores a window as "title:class:exe", escaping "#" and ":" inside each part.
 const encodePart = (s: string) => s.replace(/#/g, "#22").replace(/:/g, "#3A");
@@ -105,7 +90,7 @@ export interface Coverage {
 
 export function deviceCoverage(
   device: SystemDevice,
-  captures: Map<string, { kind: string; settings: Record<string, any> }>,
+  captures: CaptureSettings,
   devices: SystemDevice[],
 ): Coverage {
   const kinds: readonly string[] = device.flow === "capture" ? CAPTURE_KINDS.input : CAPTURE_KINDS.output;
@@ -117,7 +102,7 @@ export function deviceCoverage(
 
 export function appCoverage(
   app: SystemApp,
-  captures: Map<string, { kind: string; settings: Record<string, any> }>,
+  captures: CaptureSettings,
   devices: SystemDevice[],
 ): Coverage {
   const exe = app.exe.toLowerCase();

@@ -2,16 +2,16 @@
 import { FILTERS, loadFilters } from "./filters";
 import { obs } from "./obs";
 import type { AudioSource, MonitorType } from "./types";
+import { t } from "./i18n";
 
 export const PROFILE_VERSION = 1;
-/** Prefix of the profiles saved automatically right before applying one, so it can be undone. */
-export const BACKUP_PREFIX = "套用前的備份";
-/** Older automatic backups beyond this many are deleted. */
+/** Older automatic backups (saved right before applying a profile) beyond this many are deleted. */
 export const BACKUPS_KEPT = 5;
 
 export function backupName(date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${BACKUP_PREFIX} ${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}.${pad(date.getMinutes())}.${pad(date.getSeconds())}`;
+  const time = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}.${pad(date.getMinutes())}.${pad(date.getSeconds())}`;
+  return t("套用前的備份 {time}", { time });
 }
 
 interface ProfileFilter {
@@ -39,6 +39,8 @@ export interface Profile {
   savedAt: string;
   /** OBS scene collection the profile was saved in; source names only mean the same thing there. */
   sceneCollection?: string;
+  /** Saved automatically before applying another profile; old ones are pruned. */
+  backup?: boolean;
   sources: ProfileSource[];
 }
 
@@ -53,7 +55,7 @@ export interface ApplyResult {
 
 const TRACKS = [1, 2, 3, 4, 5, 6];
 
-export async function captureProfile(name: string, sources: AudioSource[]): Promise<Profile> {
+export async function captureProfile(name: string, sources: AudioSource[], backup = false): Promise<Profile> {
   const captured: ProfileSource[] = [];
   for (const s of sources) {
     const filters = (await loadFilters(s.name)).filter((f) => FILTERS[f.kind]);
@@ -69,7 +71,14 @@ export async function captureProfile(name: string, sources: AudioSource[]): Prom
     });
   }
   const { currentSceneCollectionName } = await obs.call("GetSceneCollectionList");
-  return { version: PROFILE_VERSION, name, savedAt: new Date().toISOString(), sceneCollection: currentSceneCollectionName, sources: captured };
+  return {
+    version: PROFILE_VERSION,
+    name,
+    savedAt: new Date().toISOString(),
+    sceneCollection: currentSceneCollectionName,
+    backup,
+    sources: captured,
+  };
 }
 
 type Json = { [key: string]: string | number | boolean | Json | Json[] | null };
@@ -105,7 +114,7 @@ export async function applyProfile(profile: Profile, current: AudioSource[]): Pr
       for (const f of s.filters) {
         let match = have.find((h) => h.name === f.name);
         if (match && match.kind !== f.kind) {
-          result.errors.push(`${inputName}：已經有另一種濾鏡叫「${f.name}」，略過`);
+          result.errors.push(t("{source}：已經有另一種濾鏡叫「{filter}」，略過", { source: inputName, filter: f.name }));
           continue;
         }
         // A filter the user renamed in OBS: reuse it instead of stacking a second one of the same kind.

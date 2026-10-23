@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { loudnessVerdict } from "../loudnessVerdict";
 import { pluginRequest } from "../obs";
+import { t } from "../i18n";
 
 interface Summary {
   durationSec: number;
@@ -24,7 +25,7 @@ const DURATIONS = [5, 10, 15];
 const PAUSE_TIMEOUT_MS = 3000;
 const HEARTBEAT_MS = 1000;
 
-const fmtDb = (v: number | null, unit: string) => (v === null ? "無聲" : `${v.toFixed(1)} ${unit}`);
+const fmtDb = (v: number | null, unit: string) => (v === null ? t("無聲") : `${v.toFixed(1)} ${unit}`);
 
 const verdict = (s: Summary) => loudnessVerdict(s.loudnessLufs, s.peakDbfs, s.clippedSamples > 0);
 
@@ -97,28 +98,28 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="sound-test-title">
       <div className="dialog">
         <div className="dialog-head">
-          <h2 id="sound-test-title">試音</h2>
+          <h2 id="sound-test-title">{t("試音")}</h2>
           <button type="button" className="link" onClick={close}>
-            關閉
+            {t("關閉")}
           </button>
         </div>
         <p className="dialog-lead">
-          錄一段 OBS 真正送去直播的聲音，再播放給你聽。播放的時候，觀眾會暫時聽不到聲音，播完自動恢復。
+          {t("錄一段直播軟體真正送出去的聲音，再播放給你聽。播放的時候，觀眾會暫時聽不到聲音，播完自動恢復。")}
         </p>
 
         {phase.kind === "idle" && (
           <div className="dialog-body">
-            <div className="row-label">錄音長度</div>
-            <div className="seg seg-inline" role="group" aria-label="錄音長度">
+            <div className="row-label">{t("錄音長度")}</div>
+            <div className="seg seg-inline" role="group" aria-label={t("錄音長度")}>
               {DURATIONS.map((d) => (
                 <button key={d} type="button" aria-pressed={seconds === d} onClick={() => setSeconds(d)}>
-                  {d} 秒
+                  {t("{n} 秒", { n: d })}
                 </button>
               ))}
             </div>
-            <p className="hint">開始後請照平常直播的方式說話、玩遊戲或放音樂。</p>
+            <p className="hint">{t("開始後請照平常直播的方式說話、玩遊戲或放音樂。")}</p>
             <button type="button" className="btn primary" onClick={record}>
-              開始錄音
+              {t("開始錄音")}
             </button>
           </div>
         )}
@@ -127,7 +128,7 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
           <div className="dialog-body">
             <div className="rec-status">
               <span className="rec-dot" />
-              錄音中 {phase.elapsed.toFixed(1)} / {seconds} 秒
+              {t("錄音中 {elapsed} / {total} 秒", { elapsed: phase.elapsed.toFixed(1), total: seconds })}
             </div>
             <div className="hmeters">
               {phase.peaks.map((p, i) => (
@@ -140,7 +141,7 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
               <b style={{ width: `${(phase.elapsed / seconds) * 100}%` }} />
             </div>
             <button type="button" className="btn" onClick={() => invoke("sound_test_stop_recording")}>
-              提前停止
+              {t("提前停止")}
             </button>
           </div>
         )}
@@ -150,36 +151,36 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
             <div className={`verdict verdict-${v.tone}`}>{v.text}</div>
             <dl className="stats">
               <div>
-                <dt>長度</dt>
-                <dd>{summary.durationSec.toFixed(1)} 秒</dd>
+                <dt>{t("長度")}</dt>
+                <dd>{t("{n} 秒", { n: summary.durationSec.toFixed(1) })}</dd>
               </div>
               <div>
-                <dt>最大聲</dt>
+                <dt>{t("最大聲")}</dt>
                 <dd>{fmtDb(summary.peakDbfs, "dBFS")}</dd>
               </div>
               <div>
-                <dt>整體響度</dt>
+                <dt>{t("整體響度")}</dt>
                 <dd>{fmtDb(summary.loudnessLufs, "LUFS")}</dd>
               </div>
             </dl>
 
             {phase.kind === "playing" ? (
               <>
-                <div className="paused-banner">直播聲音暫停中，播完自動恢復</div>
+                <div className="paused-banner">{t("直播聲音暫停中，播完自動恢復")}</div>
                 <div className="progress">
                   <b style={{ width: `${(phase.position / summary.durationSec) * 100}%` }} />
                 </div>
                 <button type="button" className="btn" onClick={() => invoke("sound_test_stop_playback")}>
-                  停止播放
+                  {t("停止播放")}
                 </button>
               </>
             ) : (
               <div className="row">
                 <button type="button" className="btn primary" onClick={() => play(summary)}>
-                  播放給我聽
+                  {t("播放給我聽")}
                 </button>
                 <button type="button" className="btn" onClick={record}>
-                  重錄
+                  {t("重錄")}
                 </button>
               </div>
             )}
@@ -190,7 +191,7 @@ export function SoundTest({ onPlayingChange, onClose }: Props) {
           <div className="dialog-body">
             <div className="verdict verdict-bad">{phase.message}</div>
             <button type="button" className="btn" onClick={() => setPhase({ kind: "idle" })}>
-              重新開始
+              {t("重新開始")}
             </button>
           </div>
         )}

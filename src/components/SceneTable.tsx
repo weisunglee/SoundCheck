@@ -1,5 +1,6 @@
 import type { AudioSource, SourceStatus } from "../types";
-import { StatusDot } from "./StatusBadge";
+import { StatusDot, statusLabel } from "./StatusBadge";
+import { t } from "../i18n";
 
 interface Props {
   sources: AudioSource[];
@@ -18,13 +19,13 @@ export function SceneTable({ sources, scenes, programScene, statusIn, onSwitch }
       <table className="scene-table">
         <thead>
           <tr>
-            <th>聲音來源</th>
+            <th>{t("聲音來源")}</th>
             {scenes.map((s) => (
               <th key={s} className={s === programScene ? "current" : undefined}>
                 <button type="button" className="link" onClick={() => onSwitch(s)}>
                   {s}
                 </button>
-                {s === programScene && <span className="onair">直播中</span>}
+                {s === programScene && <span className="onair">{t("直播中")}</span>}
               </th>
             ))}
           </tr>
@@ -35,9 +36,9 @@ export function SceneTable({ sources, scenes, programScene, statusIn, onSwitch }
               <td>
                 <div className="src-name">
                   {src.name}
-                  {src.global && <span className="tag">全域</span>}
+                  {src.global && <span className="tag">{t("全域")}</span>}
                 </div>
-                <div className="dev">{src.device}</div>
+                <div className="dev">{t(src.device)}</div>
               </td>
               {scenes.map((s) => (
                 <td key={s} className={s === programScene ? "current" : undefined}>
@@ -52,16 +53,7 @@ export function SceneTable({ sources, scenes, programScene, statusIn, onSwitch }
         {LEGEND.map((k) => (
           <span key={k}>
             <StatusDot kind={k} />
-            {
-              {
-                live: "觀眾聽得到",
-                hidden: "已隱藏",
-                muted: "已靜音",
-                monitorOnly: "只有你聽得到",
-                offStream: "沒送到直播",
-                notInScene: "不在這個場景",
-              }[k]
-            }
+            {k === "live" ? t("觀眾聽得到") : statusLabel(k)}
           </span>
         ))}
       </div>

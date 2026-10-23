@@ -15,6 +15,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::loudness::{CHANNELS, LiveLoudness, SAMPLE_RATE};
+use crate::i18n::{tr, trf};
 
 /// How often the sound test's recording meter updates.
 const RECORD_LEVEL_FRAMES: usize = SAMPLE_RATE as usize / 20;
@@ -55,7 +56,7 @@ struct RecordLevel {
 pub fn stream_tap_start(app: AppHandle, state: State<'_, StreamTapState>, port: u16) -> Result<(), String> {
     let tap = state.inner().clone();
     tap.stop_current();
-    let socket = TcpStream::connect(("127.0.0.1", port)).map_err(|e| format!("無法連到 OBS 外掛：{e}"))?;
+    let socket = TcpStream::connect(("127.0.0.1", port)).map_err(|e| trf("無法連到直播軟體的外掛：{e}", &[("e", &e)]))?;
     socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -160,13 +161,13 @@ impl StreamTap {
     /// Records `seconds` of the stream mix, or less if `stop` is set or the tap ends first.
     pub fn record(&self, seconds: f64, stop: &AtomicBool) -> Result<Vec<f32>, String> {
         if self.stop.lock().unwrap().is_none() {
-            return Err("還沒接上直播的聲音，請確認 OBS 外掛已經載入。".into());
+            return Err(tr("還沒接上直播的聲音，請確認直播軟體的外掛已經載入。"));
         }
         let (done, finished) = mpsc::channel();
         let target = (seconds * f64::from(SAMPLE_RATE)) as usize * CHANNELS;
         let mut slot = self.recording.lock().unwrap();
         if slot.is_some() {
-            return Err("已經在錄音了".into());
+            return Err(tr("已經在錄音了"));
         }
         *slot = Some(Recording {
             samples: Vec::with_capacity(target),
@@ -185,7 +186,7 @@ impl StreamTap {
         }
         let samples = self.recording.lock().unwrap().take().map(|r| r.samples).unwrap_or_default();
         if samples.is_empty() {
-            return Err("錄音時沒有收到聲音，和 OBS 外掛的連線可能中斷了。".into());
+            return Err(tr("錄音時沒有收到聲音，和外掛的連線可能中斷了。"));
         }
         Ok(samples)
     }

@@ -1,4 +1,4 @@
-//! Installs the bundled obs-audio-kit OBS plugin and reports what is installed.
+//! Installs the bundled SoundCheck OBS plugin and reports what is installed.
 //!
 //! OBS must be closed to install: Windows locks a loaded DLL, and OBS only
 //! loads plugins at startup. The app never closes OBS itself; the user does,
@@ -11,17 +11,19 @@ use std::process::Command;
 use serde::Serialize;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 use tauri::path::BaseDirectory;
+
+use crate::i18n::{tr, trf};
 use tauri::{AppHandle, Manager};
 
-pub const BUNDLED_VERSION: &str = env!("OBS_AUDIO_KIT_PLUGIN_VERSION");
+pub const BUNDLED_VERSION: &str = env!("SOUNDCHECK_PLUGIN_VERSION");
 
 /// Where the bundled plugin lives inside the app's resources (see tauri.<platform>.conf.json).
 #[cfg(target_os = "windows")]
-const RESOURCE: &str = "obs-plugin/obs-audio-kit.dll";
+const RESOURCE: &str = "obs-plugin/soundcheck.dll";
 #[cfg(target_os = "macos")]
-const RESOURCE: &str = "obs-plugin/obs-audio-kit.plugin";
+const RESOURCE: &str = "obs-plugin/soundcheck.plugin";
 #[cfg(target_os = "linux")]
-const RESOURCE: &str = "obs-plugin/obs-audio-kit.so";
+const RESOURCE: &str = "obs-plugin/soundcheck.so";
 
 #[cfg(target_os = "windows")]
 const OBS_PROCESS: &str = "obs64.exe";
@@ -42,6 +44,8 @@ pub struct PluginStatus {
     obs_running: bool,
     /// From OBS 32's plugin manager; `None` when OBS has no record of the plugin yet.
     enabled_in_plugin_manager: Option<bool>,
+    /// The plugin from before the rename (obs-audio-kit) is still installed; installing removes it.
+    legacy_installed: bool,
 }
 
 #[derive(Serialize)]
@@ -59,7 +63,7 @@ impl InstallError {
 }
 
 /// Appends one timestamped line to `install.log` in the app's log folder
-/// (Windows: %LOCALAPPDATA%\io.github.weisunglee.obsaudiokit\logs).
+/// (Windows: %LOCALAPPDATA%\io.github.weisunglee.soundcheck\logs).
 fn log(app: &AppHandle, message: impl AsRef<str>) {
     let Ok(dir) = app.path().app_log_dir() else { return };
     let _ = std::fs::create_dir_all(&dir);
@@ -79,11 +83,12 @@ fn obs_config_dir() -> Option<PathBuf> {
 }
 
 /// The installed plugin file (Windows/Linux) or bundle (macOS).
-fn install_path() -> Option<PathBuf> {
+/// Where the plugin lived before it was renamed from obs-audio-kit to soundcheck.
+fn legacy_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         let program_data = std::env::var_os("ProgramData")?;
-        Some(PathBuf::from(program_data).join(r"obs-studio\plugins\obs-audio-kit\bin\64bit\obs-audio-kit.dll"))
+        Some(PathBuf::from(program_data).join(r"obs-studio\plugins\obs-audio-kit"))
     }
     #[cfg(target_os = "macos")]
     {
@@ -91,7 +96,23 @@ fn install_path() -> Option<PathBuf> {
     }
     #[cfg(target_os = "linux")]
     {
-        Some(obs_config_dir()?.join("plugins/obs-audio-kit/bin/64bit/obs-audio-kit.so"))
+        Some(obs_config_dir()?.join("plugins/obs-audio-kit"))
+    }
+}
+
+fn install_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let program_data = std::env::var_os("ProgramData")?;
+        Some(PathBuf::from(program_data).join(r"obs-studio\plugins\soundcheck\bin\64bit\soundcheck.dll"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Some(obs_config_dir()?.join("plugins/soundcheck.plugin"))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Some(obs_config_dir()?.join("plugins/soundcheck/bin/64bit/soundcheck.so"))
     }
 }
 
@@ -137,7 +158,7 @@ fn enabled_in_plugin_manager() -> Option<bool> {
     let modules: Vec<serde_json::Value> = serde_json::from_str(&text).ok()?;
     modules
         .iter()
-        .find(|m| m["module_name"] == "obs-audio-kit")
+        .find(|m| m["module_name"] == "soundcheck")
         .and_then(|m| m["enabled"].as_bool())
 }
 
@@ -152,6 +173,7 @@ pub fn plugin_status(app: AppHandle) -> PluginStatus {
         install_path: path.map(|p| p.display().to_string()).unwrap_or_default(),
         obs_running: obs_running(),
         enabled_in_plugin_manager: enabled_in_plugin_manager(),
+        legacy_installed: legacy_path().is_some_and(|p| p.exists()),
     }
 }
 
@@ -174,7 +196,7 @@ fn check_installed(app: &AppHandle, target: &Path) -> Result<(), InstallError> {
     match found {
         Some(v) if v != BUNDLED_VERSION => Err(InstallError::new(
             "failed",
-            format!("安裝後的外掛版本是 {v}，不是預期的 {BUNDLED_VERSION}。"),
+            trf("安裝後的外掛版本是 {found}，不是預期的 {expected}。", &[("found", &v), ("expected", &BUNDLED_VERSION)]),
         )),
         _ => Ok(()),
     }
@@ -186,10 +208,10 @@ fn prepare(app: &AppHandle) -> Result<(PathBuf, PathBuf), InstallError> {
     let target = install_path();
     log(app, format!("prepare: obs_running={running} source={source:?} target={target:?}"));
     if running {
-        return Err(InstallError::new("obsRunning", "OBS 還開著。請先關閉 OBS 再安裝。"));
+        return Err(InstallError::new("obsRunning", tr("直播軟體還開著。請先關閉它再安裝。")));
     }
-    let source = source.ok_or_else(|| InstallError::new("notBundled", "這個版本的 App 沒有附外掛。"))?;
-    let target = target.ok_or_else(|| InstallError::new("failed", "找不到 OBS 的外掛資料夾。"))?;
+    let source = source.ok_or_else(|| InstallError::new("notBundled", tr("這個版本的 App 沒有附外掛。")))?;
+    let target = target.ok_or_else(|| InstallError::new("failed", tr("找不到直播軟體的外掛資料夾。")))?;
     Ok((source, target))
 }
 
@@ -228,12 +250,25 @@ fn install_normal(app: &AppHandle) -> Result<(), InstallError> {
             log(app, format!("copy: {e}"));
             return Err(InstallError::new(
                 "permissionDenied",
-                "沒有權限寫入外掛資料夾。這通常是因為之前用系統管理員權限安裝過外掛。",
+                tr("沒有權限寫入外掛資料夾。這通常是因為之前用系統管理員權限安裝過外掛。"),
             ));
         }
-        Err(e) => return Err(InstallError::new("failed", format!("複製外掛失敗：{e}"))),
+        Err(e) => return Err(InstallError::new("failed", trf("複製外掛失敗：{e}", &[("e", &e)]))),
     }
     log(app, "copy: done");
+
+    // Two copies would both register a stream tap; the old one has to go.
+    if let Some(legacy) = legacy_path().filter(|p| p.exists()) {
+        let removed = if legacy.is_dir() { std::fs::remove_dir_all(&legacy) } else { std::fs::remove_file(&legacy) };
+        match removed {
+            Ok(()) => log(app, format!("legacy: removed {}", legacy.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                log(app, format!("legacy: {e}"));
+                return Err(InstallError::new("permissionDenied", tr("沒有權限移除舊版外掛。這通常是因為之前用系統管理員權限安裝過外掛。")));
+            }
+            Err(e) => log(app, format!("legacy: could not remove {}: {e}", legacy.display())),
+        }
+    }
 
     #[cfg(target_os = "macos")]
     {
@@ -255,19 +290,23 @@ fn install_elevated(app: &AppHandle) -> Result<(), InstallError> {
     #[cfg(target_os = "windows")]
     {
         let (source, target) = prepare(app)?;
-        let dir = target.parent().ok_or_else(|| InstallError::new("failed", "外掛路徑不正確"))?;
+        let dir = target.parent().ok_or_else(|| InstallError::new("failed", tr("外掛路徑不正確")))?;
         let temp = std::env::temp_dir();
-        let script = temp.join("obs-audio-kit-install.cmd");
+        let script = temp.join("soundcheck-install.cmd");
         // The elevated script reports copy's own output and exit code here, since its
         // console is hidden and Start-Process only tells us whether it was allowed to run.
-        let result_file = temp.join("obs-audio-kit-install-result.txt");
+        let result_file = temp.join("soundcheck-install-result.txt");
         let _ = std::fs::remove_file(&result_file);
         let body = format!(
-            "@echo off\r\nif not exist \"{dir}\" mkdir \"{dir}\" > \"{res}\" 2>&1\r\ncopy /Y \"{src}\" \"{dst}\" >> \"{res}\" 2>&1\r\necho copy-exit=%errorlevel% >> \"{res}\"\r\n",
+            "@echo off\r\nif not exist \"{dir}\" mkdir \"{dir}\" > \"{res}\" 2>&1\r\ncopy /Y \"{src}\" \"{dst}\" >> \"{res}\" 2>&1\r\necho copy-exit=%errorlevel% >> \"{res}\"\r\n{legacy}",
             dir = dir.display(),
             src = source.display(),
             dst = target.display(),
             res = result_file.display(),
+            legacy = legacy_path()
+                .filter(|p| p.exists())
+                .map(|p| format!("rmdir /S /Q \"{}\" >> \"{}\" 2>&1\r\n", p.display(), result_file.display()))
+                .unwrap_or_default(),
         );
         log(app, format!("elevated: script {}:\n{body}", script.display()));
         std::fs::write(&script, &body).map_err(|e| InstallError::new("failed", e.to_string()))?;
@@ -300,17 +339,17 @@ fn install_elevated(app: &AppHandle) -> Result<(), InstallError> {
 
         // PowerShell fails Start-Process when the user answers "No" in the UAC prompt.
         if !output.status.success() {
-            return Err(InstallError::new("cancelled", "已取消系統管理員權限的安裝。"));
+            return Err(InstallError::new("cancelled", tr("已取消系統管理員權限的安裝。")));
         }
         if !target.exists() {
-            return Err(InstallError::new("failed", "安裝後找不到外掛檔案。"));
+            return Err(InstallError::new("failed", tr("安裝後找不到外掛檔案。")));
         }
         check_installed(app, &target)
     }
     #[cfg(not(target_os = "windows"))]
     {
         let _ = app;
-        Err(InstallError::new("failed", "只有 Windows 需要系統管理員權限安裝。"))
+        Err(InstallError::new("failed", tr("只有 Windows 需要系統管理員權限安裝。")))
     }
 }
 
@@ -337,15 +376,15 @@ fn spawn_obs() -> Result<(), String> {
             .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
             .spawn()
             .map(|_| ())
-            .map_err(|e| format!("無法開啟 OBS：{e}"))
+            .map_err(|e| trf("無法開啟直播軟體：{e}", &[("e", &e)]))
     }
     #[cfg(target_os = "macos")]
     {
-        Command::new("open").args(["-a", "OBS"]).spawn().map(|_| ()).map_err(|e| format!("無法開啟 OBS：{e}"))
+        Command::new("open").args(["-a", "OBS"]).spawn().map(|_| ()).map_err(|e| trf("無法開啟直播軟體：{e}", &[("e", &e)]))
     }
     #[cfg(target_os = "linux")]
     {
-        Command::new("obs").spawn().map(|_| ()).map_err(|e| format!("無法開啟 OBS：{e}"))
+        Command::new("obs").spawn().map(|_| ()).map_err(|e| trf("無法開啟直播軟體：{e}", &[("e", &e)]))
     }
 }
 

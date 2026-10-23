@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::trf;
+
 #[derive(Deserialize)]
 struct RawConfig {
     server_enabled: bool,
@@ -36,9 +38,9 @@ pub fn read_obs_websocket_config() -> Result<Option<WebsocketConfig>, String> {
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("無法讀取 {}：{e}", path.display())),
+        Err(e) => return Err(trf("無法讀取 {path}：{e}", &[("path", &path.display()), ("e", &e)])),
     };
-    let raw: RawConfig = serde_json::from_str(&text).map_err(|e| format!("OBS WebSocket 設定格式不符：{e}"))?;
+    let raw: RawConfig = serde_json::from_str(&text).map_err(|e| trf("直播軟體的 WebSocket 設定格式不符：{e}", &[("e", &e)]))?;
     Ok(Some(WebsocketConfig {
         enabled: raw.server_enabled,
         port: raw.server_port,

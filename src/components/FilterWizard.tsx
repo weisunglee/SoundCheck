@@ -11,6 +11,7 @@ import {
   updateFilterSettings,
 } from "../filters";
 import { obs } from "../obs";
+import { t } from "../i18n";
 
 type Settings = Record<string, string | number | boolean>;
 
@@ -34,7 +35,7 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
     () =>
       loadFilters(sourceName)
         .then((f) => (setFilters(f), setError(null)))
-        .catch((e: Error) => setError(`讀取濾鏡失敗：${e.message}`)),
+        .catch((e: Error) => setError(t("讀取濾鏡失敗：{error}", { error: e.message }))),
     [sourceName],
   );
 
@@ -53,7 +54,7 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
       await run();
       await reload();
     } catch (e) {
-      setError(`OBS 沒有接受這個變更：${(e as Error).message}`);
+      setError(t("直播軟體沒有接受這個變更：{error}", { error: (e as Error).message }));
     } finally {
       setBusy(false);
     }
@@ -73,23 +74,23 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="filter-title">
       <div className="dialog wide">
         <div className="dialog-head">
-          <h2 id="filter-title">{sourceName} 的聲音處理</h2>
+          <h2 id="filter-title">{t("{source} 的聲音處理", { source: sourceName })}</h2>
           <button type="button" className="link" onClick={onClose}>
-            關閉
+            {t("關閉")}
           </button>
         </div>
 
         {error && <div className="verdict verdict-bad">{error}</div>}
 
         <section className="wizard-section">
-          <h4 className="section-title">你遇到什麼問題？</h4>
+          <h4 className="section-title">{t("你遇到什麼問題？")}</h4>
           <div className="problems">
             {PROBLEMS.map((p) => {
               const solved = p.kinds.every(has);
               return (
                 <button key={p.id} type="button" className="problem" disabled={busy || solved || !filters} onClick={() => solve(p.kinds)}>
-                  <span className="problem-title">{p.title}</span>
-                  <span className="problem-detail">{solved ? "已經加上了" : p.detail}</span>
+                  <span className="problem-title">{t(p.title)}</span>
+                  <span className="problem-detail">{solved ? t("已經加上了") : t(p.detail)}</span>
                 </button>
               );
             })}
@@ -97,11 +98,11 @@ export function FilterWizard({ sourceName, inputDb, onClose }: Props) {
         </section>
 
         <section className="wizard-section">
-          <h4 className="section-title">目前的濾鏡（由上往下依序處理）</h4>
+          <h4 className="section-title">{t("目前的濾鏡（由上往下依序處理）")}</h4>
           {!filters ? (
-            <p className="hint">讀取中…</p>
+            <p className="hint">{t("讀取中…")}</p>
           ) : audioFilters.length === 0 ? (
-            <p className="hint">還沒有任何聲音濾鏡。從上面選一個問題開始。</p>
+            <p className="hint">{t("還沒有任何聲音濾鏡。從上面選一個問題開始。")}</p>
           ) : (
             <ul className="filter-list">
               {audioFilters.map((f, i) => (
@@ -162,7 +163,7 @@ function FilterCard(props: CardProps) {
     const send = pending.current;
     if (Object.keys(send).length === 0) return;
     pending.current = {};
-    updateFilterSettings(sourceName, filter.name, send).catch((e: Error) => props.onError(`OBS 沒有接受這個設定：${e.message}`));
+    updateFilterSettings(sourceName, filter.name, send).catch((e: Error) => props.onError(t("直播軟體沒有接受這個設定：{error}", { error: e.message })));
   };
   const flushRef = useRef(flush);
   flushRef.current = flush;
@@ -182,43 +183,43 @@ function FilterCard(props: CardProps) {
   return (
     <li className={filter.enabled ? "filter-card" : "filter-card off"}>
       <div className="filter-head">
-        <label className="switch" title={filter.enabled ? "按一下停用" : "按一下啟用"}>
+        <label className="switch" title={filter.enabled ? t("按一下停用") : t("按一下啟用")}>
           <input type="checkbox" checked={filter.enabled} disabled={props.busy} onChange={(e) => props.onEnabled(e.target.checked)} />
           <span className="filter-name">{filter.name}</span>
         </label>
-        {filter.name !== info.label && <span className="tag">{info.label}</span>}
+        {filter.name !== t(info.label) && <span className="tag">{t(info.label)}</span>}
         <span className="spacer" />
-        <button type="button" className="btn small" disabled={props.busy || props.first} onClick={() => props.onMove(-1)} aria-label="往上移">
+        <button type="button" className="btn small" disabled={props.busy || props.first} onClick={() => props.onMove(-1)} aria-label={t("往上移")}>
           ↑
         </button>
-        <button type="button" className="btn small" disabled={props.busy || props.last} onClick={() => props.onMove(1)} aria-label="往下移">
+        <button type="button" className="btn small" disabled={props.busy || props.last} onClick={() => props.onMove(1)} aria-label={t("往下移")}>
           ↓
         </button>
         {confirmRemove ? (
           <>
             <button type="button" className="btn small danger" disabled={props.busy} onClick={props.onRemove}>
-              確定移除
+              {t("確定移除")}
             </button>
             <button type="button" className="btn small" onClick={() => setConfirmRemove(false)}>
-              取消
+              {t("取消")}
             </button>
           </>
         ) : (
           <button type="button" className="btn small" disabled={props.busy} onClick={() => setConfirmRemove(true)}>
-            移除
+            {t("移除")}
           </button>
         )}
       </div>
-      <p className="filter-what">{info.what}</p>
+      <p className="filter-what">{t(info.what)}</p>
       {editor ? (
         <>
           <button type="button" className="link more-toggle" aria-expanded={props.expanded} onClick={props.onToggleExpanded}>
-            {props.expanded ? "收起設定" : "調整設定"}
+            {props.expanded ? t("收起設定") : t("調整設定")}
           </button>
           {props.expanded && editor({ settings, change, inputDb: props.inputDb })}
         </>
       ) : (
-        <p className="hint">這個濾鏡的設定請到 OBS 的濾鏡視窗調整。</p>
+        <p className="hint">{t("這個濾鏡的設定請到直播軟體的濾鏡視窗調整。")}</p>
       )}
     </li>
   );
@@ -276,7 +277,7 @@ const EDITORS: Record<string, (p: EditorProps) => React.ReactNode> = {
     const method = String(settings.method ?? "rnnoise");
     return (
       <div className="editor">
-        <div className="seg seg-inline" role="group" aria-label="噪音抑制方式">
+        <div className="seg seg-inline" role="group" aria-label={t("噪音抑制方式")}>
           <button type="button" aria-pressed={method === "rnnoise"} onClick={() => change({ method: "rnnoise" })}>
             RNNoise
           </button>
@@ -286,13 +287,13 @@ const EDITORS: Record<string, (p: EditorProps) => React.ReactNode> = {
         </div>
         <p className="hint">
           {method === "speex"
-            ? "Speex 最省電腦資源，效果比較普通，可以調整壓制強度。"
+            ? t("Speex 最省電腦資源，效果比較普通，可以調整壓制強度。")
             : method === "rnnoise"
-              ? "RNNoise 效果好、聲音自然，是大多數人的首選。"
-              : "這個濾鏡用的是 NVIDIA 降噪，設定請到 OBS 調整；按上面的按鈕會改成 RNNoise 或 Speex。"}
+              ? t("RNNoise 效果好、聲音自然，是大多數人的首選。")
+              : t("這個濾鏡用的是 NVIDIA 降噪，設定請到直播軟體調整；按上面的按鈕會改成 RNNoise 或 Speex。")}
         </p>
         {method === "speex" && (
-          <Slider label="壓制強度" value={num(settings.suppress_level, -30)} min={-60} max={0} unit="dB" hint="數字越小壓得越多，太多人聲會變得不自然。" onChange={(v) => change({ suppress_level: v })} />
+          <Slider label={t("壓制強度")} value={num(settings.suppress_level, -30)} min={-60} max={0} unit="dB" hint={t("數字越小壓得越多，太多人聲會變得不自然。")} onChange={(v) => change({ suppress_level: v })} />
         )}
       </div>
     );
@@ -306,15 +307,15 @@ const EDITORS: Record<string, (p: EditorProps) => React.ReactNode> = {
         <LevelBar
           inputDb={inputDb}
           markers={[
-            { db: close, label: "關上", tone: "hot" },
-            { db: open, label: "打開", tone: "ok" },
+            { db: close, label: t("關上"), tone: "hot" },
+            { db: open, label: t("打開"), tone: "ok" },
           ]}
         />
         <p className="hint">
-          說話時音量條要超過「打開」線。音量條量的是經過所有濾鏡之後的聲音，所以噪音閘關上時會掉到最左邊，這代表它正在擋掉聲音。邊講話邊調最準。
+          {t("說話時音量條要超過「打開」線。音量條量的是經過所有濾鏡之後的聲音，所以噪音閘關上時會掉到最左邊，這代表它正在擋掉聲音。邊講話邊調最準。")}
         </p>
-        <Slider label="打開的音量" value={open} min={-60} max={0} unit="dB" onChange={(v) => change({ open_threshold: v, close_threshold: Math.min(close, v) })} />
-        <Slider label="關上的音量" value={close} min={-60} max={0} unit="dB" hint="要比「打開」低一點，才不會在說話時一直開開關關。" onChange={(v) => change({ close_threshold: v, open_threshold: Math.max(open, v) })} />
+        <Slider label={t("打開的音量")} value={open} min={-60} max={0} unit="dB" onChange={(v) => change({ open_threshold: v, close_threshold: Math.min(close, v) })} />
+        <Slider label={t("關上的音量")} value={close} min={-60} max={0} unit="dB" hint={t("要比「打開」低一點，才不會在說話時一直開開關關。")} onChange={(v) => change({ close_threshold: v, open_threshold: Math.max(open, v) })} />
       </div>
     );
   },
@@ -328,13 +329,13 @@ const EDITORS: Record<string, (p: EditorProps) => React.ReactNode> = {
         <div className="editor-row">
           <div className="editor-col narrow">
             <CompressorCurve threshold={threshold} ratio={ratio} gain={gain} />
-            <span className="hint">橫軸是進來的音量，縱軸是出去的音量；黃線以右的聲音會被壓小。</span>
-            <LevelBar inputDb={inputDb} markers={[{ db: threshold, label: "開始壓縮", tone: "hot" }]} />
+            <span className="hint">{t("橫軸是進來的音量，縱軸是出去的音量；黃線以右的聲音會被壓小。")}</span>
+            <LevelBar inputDb={inputDb} markers={[{ db: threshold, label: t("開始壓縮"), tone: "hot" }]} />
           </div>
           <div className="editor-col">
-            <Slider label="開始壓縮的音量" value={threshold} min={-60} max={0} unit="dB" hint="比這個大聲的部分才會被壓小。" onChange={(v) => change({ threshold: v })} />
-            <Slider label="壓縮比例" value={ratio} min={1} max={20} step={0.5} unit=": 1" hint="說話用 3～6 比較自然；越大壓得越平。" onChange={(v) => change({ ratio: v })} />
-            <Slider label="壓縮後補回的音量" value={gain} min={0} max={20} step={0.5} unit="dB" hint="壓縮會讓整體變小聲，用這個補回來。" onChange={(v) => change({ output_gain: v })} />
+            <Slider label={t("開始壓縮的音量")} value={threshold} min={-60} max={0} unit="dB" hint={t("比這個大聲的部分才會被壓小。")} onChange={(v) => change({ threshold: v })} />
+            <Slider label={t("壓縮比例")} value={ratio} min={1} max={20} step={0.5} unit=": 1" hint={t("說話用 3～6 比較自然；越大壓得越平。")} onChange={(v) => change({ ratio: v })} />
+            <Slider label={t("壓縮後補回的音量")} value={gain} min={0} max={20} step={0.5} unit="dB" hint={t("壓縮會讓整體變小聲，用這個補回來。")} onChange={(v) => change({ output_gain: v })} />
           </div>
         </div>
       </div>
@@ -345,15 +346,15 @@ const EDITORS: Record<string, (p: EditorProps) => React.ReactNode> = {
     const threshold = num(settings.threshold, -6);
     return (
       <div className="editor">
-        <LevelBar inputDb={inputDb} markers={[{ db: threshold, label: "上限", tone: "hot" }]} />
-        <Slider label="音量上限" value={threshold} min={-20} max={0} step={0.5} unit="dB" hint="-1 到 -3 dB 最常見。設太低會讓大聲的地方聽起來被悶住。" onChange={(v) => change({ threshold: v })} />
+        <LevelBar inputDb={inputDb} markers={[{ db: threshold, label: t("上限"), tone: "hot" }]} />
+        <Slider label={t("音量上限")} value={threshold} min={-20} max={0} step={0.5} unit="dB" hint={t("-1 到 -3 dB 最常見。設太低會讓大聲的地方聽起來被悶住。")} onChange={(v) => change({ threshold: v })} />
       </div>
     );
   },
 
   gain_filter: ({ settings, change }) => (
     <div className="editor">
-      <Slider label="放大或縮小" value={num(settings.db, 0)} min={-20} max={20} step={0.5} unit="dB" hint="+6 dB 大約是聽起來大一倍。放大太多會連雜音一起變大。" onChange={(v) => change({ db: v })} />
+      <Slider label={t("放大或縮小")} value={num(settings.db, 0)} min={-20} max={20} step={0.5} unit="dB" hint={t("+6 dB 大約是聽起來大一倍。放大太多會連雜音一起變大。")} onChange={(v) => change({ db: v })} />
     </div>
   ),
 };
@@ -367,7 +368,7 @@ function CompressorCurve({ threshold, ratio, gain }: { threshold: number; ratio:
   const out = (db: number) => (db < threshold ? db : threshold + (db - threshold) / ratio) + gain;
   const points = [lo, threshold, 0].map((db) => `${toX(db)},${toY(out(db))}`).join(" ");
   return (
-    <svg className="curve" viewBox={`-4 -4 ${size + 8} ${size + 8}`} width={size + 8} height={size + 8} role="img" aria-label="壓縮曲線">
+    <svg className="curve" viewBox={`-4 -4 ${size + 8} ${size + 8}`} width={size + 8} height={size + 8} role="img" aria-label={t("壓縮曲線")}>
       <rect x={0} y={0} width={size} height={size} className="curve-bg" />
       <line x1={0} y1={size} x2={size} y2={0} className="curve-ref" />
       <line x1={toX(threshold)} y1={0} x2={toX(threshold)} y2={size} className="curve-threshold" />

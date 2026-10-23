@@ -1,4 +1,4 @@
-// Validation for the obs-audio-kit plugin, run on the machine where OBS runs:
+// Validation for the SoundCheck plugin, run on the machine where OBS runs:
 //   node tap-test.mjs [seconds] [track]
 // Connects with the local obs-websocket settings, asks the plugin which tracks go
 // to the stream, records that track's mix to tap-test.wav, and prints levels.
@@ -42,7 +42,7 @@ const version = await obs.call("GetVersion");
 console.log(`OBS ${version.obsVersion}, obs-websocket ${version.obsWebSocketVersion}`);
 
 const vendor = (requestType, requestData = {}) =>
-  obs.call("CallVendorRequest", { vendorName: "obs-audio-kit", requestType, requestData }).then((r) => r.responseData);
+  obs.call("CallVendorRequest", { vendorName: "soundcheck", requestType, requestData }).then((r) => r.responseData);
 
 const info = await vendor("GetInfo");
 console.log("GetInfo:", JSON.stringify(info));

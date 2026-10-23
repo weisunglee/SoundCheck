@@ -1,8 +1,10 @@
+mod i18n;
 mod loudness;
 mod obs_config;
-mod obs_watch;
+mod presence;
 mod plugin_install;
 mod profiles;
+mod slobs;
 mod sound_test;
 mod stream_tap;
 mod system_audio;
@@ -13,11 +15,17 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(sound_test::SoundTestState::default())
         .manage(stream_tap::StreamTapState::default())
+        .manage(slobs::Slobs::default())
         .setup(|app| {
-            obs_watch::start(app.handle().clone());
+            profiles::migrate_from_old_identifier(app.handle());
+            presence::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            i18n::set_language,
+            slobs::slobs_connect,
+            slobs::slobs_send,
+            slobs::slobs_disconnect,
             obs_config::read_obs_websocket_config,
             plugin_install::plugin_status,
             plugin_install::install_plugin,

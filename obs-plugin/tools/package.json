@@ -1,5 +1,5 @@
 {
-  "name": "obs-audio-kit-plugin-tools",
+  "name": "soundcheck-plugin-tools",
   "private": true,
   "type": "module",
   "dependencies": {

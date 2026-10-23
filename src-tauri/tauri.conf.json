@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "obs-audio-kit",
+  "productName": "SoundCheck",
   "version": "0.1.0",
-  "identifier": "io.github.weisunglee.obsaudiokit",
+  "identifier": "io.github.weisunglee.soundcheck",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "obs-audio-kit",
+        "title": "SoundCheck",
         "width": 1100,
         "height": 760,
         "minWidth": 480,
@@ -33,5 +33,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
-  }
+  },
+  "mainBinaryName": "SoundCheck"
 }

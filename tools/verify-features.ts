@@ -6,13 +6,14 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { FILTERS, addFilter, loadFilters, moveFilter, removeFilter, updateFilterSettings } from "../src/filters";
+import { t } from "../src/i18n";
 import { obs } from "../src/obs";
 import { loadState } from "../src/obsAudio";
 import { applyProfile, captureProfile } from "../src/profiles";
 
-const SCENE = "obs-audio-kit 測試場景";
-const INPUT = "obs-audio-kit 測試來源";
-const APP_INPUT = "obs-audio-kit 測試應用程式";
+const SCENE = "SoundCheck 測試場景";
+const INPUT = "SoundCheck 測試來源";
+const APP_INPUT = "SoundCheck 測試應用程式";
 
 const configPath =
   process.platform === "win32"
@@ -83,9 +84,9 @@ try {
   chain = await loadFilters(INPUT);
   check(chain[0].name === gate.name, "filter moves up");
   const added2 = await addFilter(INPUT, "gain_filter");
-  check(added2 === "增益", "new filter gets its plain name", added2);
+  check(added2 === t("增益"), "new filter gets its plain name in the UI language", added2);
   const dup = await addFilter(INPUT, "gain_filter");
-  check(dup === "增益 2", "second filter of a kind gets a unique name", dup);
+  check(dup === `${t("增益")} 2`, "second filter of a kind gets a unique name", dup);
   await removeFilter(INPUT, dup);
   check(!(await loadFilters(INPUT)).some((f) => f.name === dup), "filter removed");
 
@@ -115,7 +116,7 @@ try {
   const after = (await loadState()).sources.filter((s) => s.name === INPUT);
   const result = await applyProfile({ ...profile, sources: [...profile.sources, { ...profile.sources[0], name: "不存在的來源" }] }, after);
   check(result.applied.join() === INPUT && result.missing.join() === "不存在的來源", "apply reports applied and missing sources", JSON.stringify(result));
-  check(result.extraFilters.some((f) => f.includes("擴展器")), "filter not in the profile is reported, not removed");
+  check(result.extraFilters.some((f) => f.includes(t("擴展器"))), "filter not in the profile is reported, not removed");
 
   const restored = (await loadState()).sources.find((s) => s.name === INPUT)!;
   // OBS keeps balance as a float, so 0.3 comes back as 0.30000001.

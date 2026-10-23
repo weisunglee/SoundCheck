@@ -14,6 +14,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::loudness::{self, Summary, CHANNELS, SAMPLE_RATE};
+use crate::i18n::{tr, trf};
 use crate::stream_tap::StreamTapState;
 
 pub const MAX_SECONDS: f64 = 15.0;
@@ -79,10 +80,10 @@ fn play(app: &AppHandle, test: &SoundTest) -> Result<(), String> {
     test.stop_playback.store(false, Ordering::SeqCst);
     let samples = Arc::new(test.recording.lock().unwrap().clone());
     if samples.is_empty() {
-        return Err("還沒有錄音".into());
+        return Err(tr("還沒有錄音"));
     }
 
-    let device = cpal::default_host().default_output_device().ok_or("找不到播放裝置")?;
+    let device = cpal::default_host().default_output_device().ok_or_else(|| tr("找不到播放裝置"))?;
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let config: cpal::StreamConfig = supported.config();
 
@@ -92,7 +93,7 @@ fn play(app: &AppHandle, test: &SoundTest) -> Result<(), String> {
         cpal::SampleFormat::F32 => build_stream::<f32>(&device, &config, &samples, &position, &finished),
         cpal::SampleFormat::I16 => build_stream::<i16>(&device, &config, &samples, &position, &finished),
         cpal::SampleFormat::U16 => build_stream::<u16>(&device, &config, &samples, &position, &finished),
-        other => return Err(format!("不支援的播放格式：{other}")),
+        other => return Err(trf("不支援的播放格式：{format}", &[("format", &other)])),
     }?;
     stream.play().map_err(|e| e.to_string())?;
 

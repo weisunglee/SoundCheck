@@ -32,8 +32,8 @@ export interface AudioSource {
 }
 
 export interface SceneItem {
-  /** OBS sceneItemId, unique within its scene. */
-  id: number;
+  /** The software's id for the item, unique within its scene (a number in OBS, a string in Streamlabs). */
+  id: number | string;
   sourceName: string;
   /** The eye toggle in OBS. */
   enabled: boolean;
