@@ -6,7 +6,7 @@
 
 - **支援的直播軟體**：
   - **OBS Studio 28 以上**：全部功能（透過內建的 obs-websocket 連線）。
-  - **Streamlabs Desktop**：精簡版。透過它的本機 API（Windows 的 named pipe `\\.\pipe\slobs`、macOS 的 `slobs.sock`）連線，本機連線免 Token。可以調音量、靜音、切換場景、顯示來源、看來源狀態和新增來源；它的 API 沒有濾鏡和音量表、監聽／音軌／同步偏移只能讀不能改，也不載入第三方 OBS 外掛，所以濾鏡精靈、試音、實況輸出音量表、設定檔在 Streamlabs 上會自動隱藏。
+  - **Streamlabs Desktop**：透過它的本機 API（Windows 的 named pipe `\\.\pipe\slobs`、macOS 的 `slobs.sock`）連線，本機連線免 Token。可以調音量、靜音、監聽、音軌、提早延後、切換場景、顯示來源、看來源狀態、新增來源，也能用濾鏡精靈和設定檔。監聽、音軌、提早延後和濾鏡用的是 Streamlabs 沒寫在文件上的內部呼叫（它的 API 會把外部物件沒有的方法轉給內部物件），`tools/verify-streamlabs.ts` 會在實際的 Streamlabs 上逐項驗證。它沒有聲道平衡，外部拿不到音量表，也不載入第三方 OBS 外掛，所以來源音量表、左右平衡、試音、實況輸出音量表在 Streamlabs 上會自動隱藏。
   - 右上角可以選「自動偵測」（有開哪個就連哪個，兩個都開時優先 OBS）、OBS 或 Streamlabs。介面一般用「直播軟體」稱呼，只有教學步驟用 `{app}` 帶出軟體名稱。
 - **介面語言**：繁體中文、简体中文、English、日本語、한국어，可在右上角切換，第一次開啟會跟著系統語言。
 - **平台**：Windows（主要測試平台）、macOS、Linux。系統聲音偵測和應用程式擷取目前只支援 Windows。
@@ -157,7 +157,7 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 #### 待驗證
 
-- Streamlabs Desktop 連接層（連線、讀取場景與來源、音量 dB 與 deflection 的換算、靜音、切換場景、顯示來源、新增來源）在實際的 Streamlabs 上測試
+- Streamlabs Desktop 連接層：`npx tsx tools/verify-streamlabs.ts`（在暫時來源上驗證監聽、音軌、提早延後、音量、靜音、事件、濾鏡精靈和設定檔，28 項）在實際的 Streamlabs 上通過；連線、讀取場景與來源、切換場景、顯示來源、新增來源還要在 App 裡實際操作確認
 - OBS 改了 WebSocket 連接埠或密碼後，App 是否會自動用新設定重連（每次連線都會重新讀設定檔，但還沒實測）
 - 直播中時，從直播輸出的 mixer mask 讀取直播音軌（`streamTracksOrigin: "output"`）
 - 簡易輸出模式下的直播音軌判斷
@@ -172,7 +172,10 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 `src/adapter.ts` 是 SoundCheck 和直播軟體之間的 seam：每個直播軟體一個 adapter（`src/obsAdapter.ts`、`src/streamlabsAdapter.ts`），提供讀取狀態、回報變更和各種設定操作；做不到的操作直接不提供，`capabilitiesOf()` 依此推導介面要隱藏哪些功能。`src/audio.ts` 的 `useAudio` 是所有軟體共用的狀態層（載入、套用變更、結構變更後重新讀取、操作時先更新畫面）；濾鏡精靈（`src/filters.ts`）和設定檔（`src/profiles.ts`）也只透過 adapter 操作。obs-websocket 連線本身在 `src/obsClient.ts`，連線和重試流程在 `src/connection.ts`。Streamlabs 的 JSON-RPC 用戶端在 `src/streamlabs.ts`，傳輸由 Rust 的 `src-tauri/src/slobs.rs` 負責（tokio 的 named pipe／Unix socket）；`src-tauri/src/presence.rs` 每秒偵測兩個軟體是否在執行、是否可以連線。
 
-Streamlabs 的音量用 libobs 的 IEC 推桿曲線（deflection 0～1 對應 -60～0 dB），所以 SoundCheck 設定音量時先把 dB 換成 deflection。它沒有推桿和靜音的變更事件，所以每秒輪詢一次音訊來源；場景和來源的結構變更有事件可以訂閱。
+Streamlabs 的音量用 libobs 的 IEC 推桿曲線（deflection 0～1 對應 -60～0 dB），所以 SoundCheck 設定音量時先把 dB 換成 deflection。推桿、監聽、音軌、提早延後的變更來自 `AudioService.audioSourceUpdated`，靜音和改名來自 `SourcesService.sourceUpdated`，濾鏡和場景結構也都有事件。幾個要注意的地方：
+- Streamlabs 給所有外部程式共用每秒 2 點的呼叫額度，`getScenes` 每次耗 1 點；超過時用戶端會等 1 秒重試，靜音之類的小變更也直接套用，不整份重新讀取
+- 它自己記錄的濾鏡設定只存最後一次送去的內容，所以改濾鏡設定時一律讀出完整設定（從屬性表單讀，含預設值）合併後整份送出
+- 濾鏡排序只能「往上下移幾格」，不能改名；設定檔遇到被改名的同種濾鏡會改成新增一個
 
 ### 技術架構
 

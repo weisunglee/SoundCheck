@@ -8,7 +8,8 @@ Desktop. SoundCheck talks to one at a time through an adapter. UI text says 直�
 names the product (`{app}`) in steps that point at its menus.
 
 **Capabilities**: what the connected streaming software lets SoundCheck read and change.
-OBS supports everything; Streamlabs only volume, mute, scenes and item visibility.
+OBS supports everything; Streamlabs everything except level meters, balance and the plugin
+(its monitoring, tracks, sync offset and filters go through undocumented internal calls).
 
 **音訊來源 (audio source)**: an input in the streaming software that can make sound: a mic, desktop
 audio, an app capture, a media or browser source. Identified by its name.

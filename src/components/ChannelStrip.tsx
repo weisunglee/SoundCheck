@@ -156,6 +156,7 @@ export function ChannelStrip(props: Props) {
       )}
       {moreOpen && (props.caps.balance || props.caps.syncOffset) && (
         <div className="more">
+          {props.caps.balance && (
           <label className="field">
             <span className="field-label">
               {t("左右平衡")} <span className="field-value">{balanceLabel(source.balance)}</span>
@@ -170,6 +171,8 @@ export function ChannelStrip(props: Props) {
               onChange={(e) => props.onBalance(snapCentre(Number(e.target.value)))}
             />
           </label>
+          )}
+          {props.caps.syncOffset && (
           <label className="field">
             <span className="field-label">
               {t("聲音提早或延後")} <span className="field-value">{source.syncOffsetMs} ms</span>
@@ -184,6 +187,7 @@ export function ChannelStrip(props: Props) {
             </span>
             <span className="hint">{t("嘴型和聲音對不上時用：聲音比畫面早就按「延後」。")}</span>
           </label>
+          )}
         </div>
       )}
 

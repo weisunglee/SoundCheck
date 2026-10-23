@@ -1,27 +1,12 @@
 // OBS Studio behind the SoftwareAdapter interface, over obs-websocket v5. OBS can do everything
 // the interface offers, and reports every change as an event.
 import type { RequestBatchRequest } from "obs-websocket-js";
-import { type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
+import { AUDIO_FILTER_KINDS, type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
 import { meterPosition, toDb } from "./levels";
 import { obs } from "./obsClient";
 import { plugin } from "./plugin";
 import { CAPTURE_KIND_SET } from "./systemAudio";
 import type { AudioSource, ChannelLevels, Filter, MonitorType, Scene, SceneItem } from "./types";
-
-/** Filter kinds that process audio; other filters on a source (chroma key, crop…) are left out. */
-const AUDIO_FILTER_KINDS = new Set([
-  "noise_suppress_filter",
-  "noise_suppress_filter_v2",
-  "noise_gate_filter",
-  "compressor_filter",
-  "limiter_filter",
-  "gain_filter",
-  "expander_filter",
-  "upward_compressor_filter",
-  "basic_eq_filter",
-  "invert_polarity_filter",
-  "vst_filter",
-]);
 
 const STRUCTURE_EVENTS = [
   "SceneCreated",

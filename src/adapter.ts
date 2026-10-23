@@ -37,7 +37,8 @@ export interface FilterOps {
   list(source: string): Promise<SourceFilter[]>;
   create(source: string, name: string, kind: string, settings: FilterSettings): Promise<void>;
   remove(source: string, name: string): Promise<void>;
-  rename(source: string, name: string, newName: string): Promise<void>;
+  /** Left out when the program can't rename filters. */
+  rename?(source: string, name: string, newName: string): Promise<void>;
   /** Moves the filter to `index` among all of the source's filters. */
   move(source: string, name: string, index: number): Promise<void>;
   /** Merges `settings` into the filter's, or replaces them all when `replace` is set. */
@@ -99,7 +100,7 @@ export interface Capabilities {
   filters: boolean;
   /** The SoundCheck plugin (sound test, stream meter, installer) exists for OBS only. */
   plugin: boolean;
-  /** Profiles save and restore everything above, so they need all of it. */
+  /** Profiles save and restore volume, mute, monitoring, sync offset, tracks and filters (and balance where there is one). */
   profiles: boolean;
 }
 
@@ -113,8 +114,23 @@ export function capabilitiesOf(adapter: SoftwareAdapter): Capabilities {
     filters: Boolean(adapter.filters),
     plugin: adapter.id === "obs",
   };
-  return { ...caps, profiles: caps.monitoringControl && caps.tracksControl && caps.balance && caps.syncOffset && caps.filters };
+  return { ...caps, profiles: caps.monitoringControl && caps.tracksControl && caps.syncOffset && caps.filters };
 }
+
+/** Filter kinds that process audio; other filters on a source (chroma key, crop…) are left out. */
+export const AUDIO_FILTER_KINDS = new Set([
+  "noise_suppress_filter",
+  "noise_suppress_filter_v2",
+  "noise_gate_filter",
+  "compressor_filter",
+  "limiter_filter",
+  "gain_filter",
+  "expander_filter",
+  "upward_compressor_filter",
+  "basic_eq_filter",
+  "invert_polarity_filter",
+  "vst_filter",
+]);
 
 /** Names users see for input kinds; OBS and Streamlabs share libobs kinds (translated where shown). */
 export const INPUT_KIND_LABELS: Record<string, string> = {

@@ -243,7 +243,7 @@ export default function App() {
 
               {!caps.plugin && (
                 <p className="hint notice-inline">
-                  {t("{app} 不提供音量表、濾鏡、監聽和音軌的設定，也不能裝外掛，所以這些功能在 {app} 上無法使用；音量、靜音和場景可以正常調整。")}
+                  {t("{app} 不提供音量表和左右平衡，也不能裝外掛，所以來源音量表、直播音量表和試音在 {app} 上無法使用；其他設定都可以正常調整。")}
                 </p>
               )}
 

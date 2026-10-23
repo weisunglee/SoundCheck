@@ -55,13 +55,14 @@ export interface ApplyResult {
   errors: string[];
 }
 
-type ProfileAdapter = Required<Pick<SoftwareAdapter, "setVolume" | "setMuted" | "setMonitorType" | "setBalance" | "setSyncOffset" | "setTracks" | "sceneCollection">> & {
-  filters: FilterOps;
-};
+type ProfileAdapter = SoftwareAdapter &
+  Required<Pick<SoftwareAdapter, "setMonitorType" | "setSyncOffset" | "setTracks">> & {
+    filters: FilterOps;
+  };
 
 function profileAdapter(adapter: SoftwareAdapter): ProfileAdapter {
-  const { setMonitorType, setBalance, setSyncOffset, setTracks, filters, sceneCollection } = adapter;
-  if (!setMonitorType || !setBalance || !setSyncOffset || !setTracks || !filters || !sceneCollection) {
+  const { setMonitorType, setSyncOffset, setTracks, filters } = adapter;
+  if (!setMonitorType || !setSyncOffset || !setTracks || !filters) {
     throw new Error(t("{app} 不支援設定檔。"));
   }
   return adapter as ProfileAdapter;
@@ -97,7 +98,7 @@ export async function captureProfile(adapter: SoftwareAdapter, name: string, sou
     version: PROFILE_VERSION,
     name,
     savedAt: new Date().toISOString(),
-    sceneCollection: await sw.sceneCollection(),
+    sceneCollection: await sw.sceneCollection?.(),
     backup,
     sources: captured,
   };
@@ -122,7 +123,8 @@ export async function applyProfile(adapter: SoftwareAdapter, profile: Profile, c
       await sw.setVolume(inputName, s.volumeDb);
       await sw.setMuted(inputName, s.muted);
       await sw.setMonitorType(inputName, profileMonitorType(s.monitorType));
-      await sw.setBalance(inputName, s.balance);
+      // A program without balance skips it; the saved value stays in the profile.
+      await sw.setBalance?.(inputName, s.balance);
       await sw.setSyncOffset(inputName, s.syncOffsetMs);
       await sw.setTracks(inputName, s.tracks);
 
@@ -136,7 +138,7 @@ export async function applyProfile(adapter: SoftwareAdapter, profile: Profile, c
           continue;
         }
         // A filter the user renamed in the software: reuse it instead of stacking a second one of the same kind.
-        if (!match) {
+        if (!match && sw.filters.rename) {
           const renamed = have.find((h) => h.kind === f.kind && !savedNames.has(h.name));
           if (renamed) {
             await sw.filters.rename(inputName, renamed.name, f.name);

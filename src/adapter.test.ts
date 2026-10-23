@@ -10,21 +10,23 @@ describe("capabilitiesOf", () => {
   it("gives OBS everything", () => {
     expect(Object.values(capabilitiesOf(obsAdapter)).every(Boolean)).toBe(true);
   });
-  it("gives Streamlabs only what its API can do", () => {
+  it("gives Streamlabs everything but meters, balance and the plugin", () => {
     expect(capabilitiesOf(streamlabsAdapter)).toEqual({
       meters: false,
-      monitoringControl: false,
-      tracksControl: false,
+      monitoringControl: true,
+      tracksControl: true,
       balance: false,
-      syncOffset: false,
-      filters: false,
+      syncOffset: true,
+      filters: true,
       plugin: false,
-      profiles: false,
+      profiles: true,
     });
   });
-  it("needs every setting a profile saves before offering profiles", () => {
+  it("offers profiles without balance, but not without filters", () => {
     const { setBalance: _, ...withoutBalance } = obsAdapter;
-    expect(capabilitiesOf(withoutBalance).profiles).toBe(false);
+    expect(capabilitiesOf(withoutBalance).profiles).toBe(true);
+    const { filters: __, ...withoutFilters } = obsAdapter;
+    expect(capabilitiesOf(withoutFilters).profiles).toBe(false);
   });
 });
 
