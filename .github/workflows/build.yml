@@ -3,9 +3,9 @@
 #
 # - Pull request, push to main, or a manual run (Actions → Build → Run workflow): runs the
 #   checks and tests, builds both platforms, and keeps the installers as workflow artifacts.
-# - Push to main with a new version in src-tauri/tauri.conf.json (one without a v<version> tag
-#   yet): the builds go into a draft release v<version> instead, which is published once both
-#   platforms are in it.
+# - Push to main that changes the version in src-tauri/tauri.conf.json to one without a
+#   v<version> tag yet: the builds go into a draft release v<version> instead, which is
+#   published once the checks pass and both platforms are in it. Other pushes only check.
 name: Build
 
 on:
@@ -51,20 +51,31 @@ jobs:
         with:
           fetch-depth: 0
       - id: version
-        name: Read the app version and look for its tag
+        name: Decide whether this push releases a new version
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
           version=$(jq -r .version src-tauri/tauri.conf.json)
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "$GITHUB_EVENT_NAME: building v$version without a release."
-          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "v$version is already released: building without a release."
-          else
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "Releasing v$version."
+          # The version before this push; empty for a manual run, a pull request or a new branch.
+          previous=""
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            previous=$(git show "$BEFORE:src-tauri/tauri.conf.json" | jq -r .version)
           fi
+          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            release=false; why="$GITHUB_EVENT_NAME: building v$version without a release."
+          elif [ -z "$previous" ]; then
+            release=false; why="No earlier commit to compare with: building v$version without a release."
+          elif [ "$previous" = "$version" ]; then
+            release=false; why="The version stayed v$version: building without a release."
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            release=false; why="v$version already has a tag: building without a release."
+          else
+            release=true; why="The version changed from v$previous to v$version: releasing v$version."
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "$why"
+          echo "::notice::$why"
 
   build:
     name: Build (${{ matrix.name }})
