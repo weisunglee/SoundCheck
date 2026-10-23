@@ -1,7 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "../obs-plugin/build_x64/RelWithDebInfo/soundcheck.dll": "obs-plugin/soundcheck.dll"
+      "../obs-plugin/build_x64/RelWithDebInfo/soundcheck.dll": "obs-plugin/soundcheck.dll",
+      "../obs-plugin/build_x64_streamlabs/RelWithDebInfo/soundcheck-streamlabs.dll": "obs-plugin/soundcheck-streamlabs.dll"
     }
   }
 }

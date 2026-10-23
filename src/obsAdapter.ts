@@ -4,7 +4,7 @@ import type { RequestBatchRequest } from "obs-websocket-js";
 import { AUDIO_FILTER_KINDS, type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
 import { meterPosition, toDb } from "./levels";
 import { obs } from "./obsClient";
-import { plugin } from "./plugin";
+import { obsPlugin, obsPluginLink } from "./plugin";
 import { CAPTURE_KIND_SET } from "./systemAudio";
 import type { AudioSource, ChannelLevels, Filter, MonitorType, Scene, SceneItem } from "./types";
 
@@ -138,7 +138,7 @@ async function load(): Promise<AudioState> {
 
   // Only the SoundCheck plugin can tell which tracks the stream encodes; without it, assume
   // OBS's default of track 1.
-  const streamTracks = await plugin.info().then(
+  const streamTracks = await obsPlugin.info().then(
     (info) => info.streamTracks,
     () => [1],
   );
@@ -293,6 +293,7 @@ export const obsAdapter: SoftwareAdapter = {
   syncOffsetRange: [-950, 20000],
   filters,
   sceneCollection: async () => (await obs.call("GetSceneCollectionList")).currentSceneCollectionName,
+  plugin: obsPluginLink,
 };
 
 /** Whether OBS is streaming or recording right now (for warnings before it has to close). */

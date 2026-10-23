@@ -6,7 +6,7 @@
 
 - **支援的直播軟體**：
   - **OBS Studio 28 以上**：全部功能（透過內建的 obs-websocket 連線）。
-  - **Streamlabs Desktop**：透過它的本機 API（Windows 的 named pipe `\\.\pipe\slobs`、macOS 的 `slobs.sock`）連線，本機連線免 Token。可以調音量、靜音、監聽、音軌、提早延後、切換場景、顯示來源、看來源狀態、新增來源，也能用濾鏡精靈和設定檔。監聽、音軌、提早延後和濾鏡用的是 Streamlabs 沒寫在文件上的內部呼叫（它的 API 會把外部物件沒有的方法轉給內部物件），`tools/verify-streamlabs.ts` 會在實際的 Streamlabs 上逐項驗證。它沒有聲道平衡，外部拿不到音量表，也不載入第三方 OBS 外掛，所以來源音量表、左右平衡、試音、實況輸出音量表在 Streamlabs 上會自動隱藏。
+  - **Streamlabs Desktop**：透過它的本機 API（Windows 的 named pipe `\\.\pipe\slobs`、macOS 的 `slobs.sock`）連線，本機連線免 Token。可以調音量、靜音、監聽、音軌、提早延後、切換場景、顯示來源、看來源狀態、新增來源，也能用濾鏡精靈和設定檔。監聽、音軌、提早延後和濾鏡用的是 Streamlabs 沒寫在文件上的內部呼叫（它的 API 會把外部物件沒有的方法轉給內部物件），`tools/verify-streamlabs.ts` 會在實際的 Streamlabs 上逐項驗證。試音和實況輸出音量表用 SoundCheck 外掛的 Streamlabs 版（見「直播監聽」）。它沒有聲道平衡，外部也拿不到各來源的音量表，所以來源音量表和左右平衡在 Streamlabs 上會自動隱藏。
   - 右上角可以選「自動偵測」（有開哪個就連哪個，兩個都開時優先 OBS）、OBS 或 Streamlabs。介面一般用「直播軟體」稱呼，只有教學步驟用 `{app}` 帶出軟體名稱。
 - **介面語言**：繁體中文、简体中文、English、日本語、한국어，可在右上角切換，第一次開啟會跟著系統語言。
 - **平台**：Windows（主要測試平台）、macOS、Linux。系統聲音偵測和應用程式擷取目前只支援 Windows。
@@ -115,12 +115,23 @@ OBS 混音器 ──(直播用的音軌)──▶ 外掛 ──本機連線─�
 
 #### 一鍵安裝
 
-外掛的請求協定、版本比較和「要不要安裝／更新」的判斷都在 `src/plugin.ts`（`plugin`、`assessPlugin`、`pluginApplies`），有單元測試。外掛的二進位檔打包在本工具裡，不另外下載（Windows 由 `src-tauri/tauri.windows.conf.json` 把建置好的 DLL 放進 App 資源）。只有 App 附的版本比 OBS 載入的（或已安裝檔案的）版本新時，才會提示安裝或更新；版本號以 `obs-plugin/buildspec.json` 為準。安裝流程：
+外掛的請求協定、版本比較和「要不要安裝／更新」的判斷都在 `src/plugin.ts`（`createPlugin`、`assessPlugin`、`pluginApplies`），有單元測試；請求怎麼送到外掛由各軟體的 adapter 提供（`PluginLink`）。外掛的二進位檔打包在本工具裡，不另外下載（Windows 由 `src-tauri/tauri.windows.conf.json` 把建置好的 DLL 放進 App 資源）。只有 App 附的版本比 OBS 載入的（或已安裝檔案的）版本新時，才會提示安裝或更新；版本號以 `obs-plugin/buildspec.json` 為準。安裝流程：
 
 1. 偵測 OBS 版本和外掛資料夾
 2. OBS 正在執行時，請使用者關閉 OBS（Windows 上已載入的 DLL 無法覆寫，而且外掛要重開 OBS 才會載入）
 3. 複製外掛到資料夾
 4. 幫使用者重新開啟 OBS，連上後用 vendor request 確認外掛已載入
+
+#### Streamlabs 版外掛
+
+Streamlabs Desktop 沒有 obs-websocket，也沒有 OBS 主程式的介面，但它會載入 `%APPDATA%\slobs-plugins\obs-plugins\64bit\` 裡的 libobs 模組（啟動時自動載入；開著時也能從外部用 `ObsUserPluginsService.initializeModule` 立刻載入）。所以外掛另外編一個 Streamlabs 版 `soundcheck-streamlabs`（`cmake --preset windows-x64 -B build_x64_streamlabs -DSOUNDCHECK_STREAMLABS=ON`），請求處理和 OBS 版共用 `obs-plugin/src/requests.cpp`：
+
+- **控制**：外掛開一個只接受本機連線的控制埠，把埠號和隨機 token 寫進 Streamlabs 給它的資料夾（`%APPDATA%\slobs-plugins\data\obs-plugins\soundcheck-streamlabs\control.json`）；App 由 Rust 的 `src-tauri/src/streamlabs_plugin.rs` 連過去，每個請求一行 JSON
+- **直播音軌**：從正在送往直播服務的 output 讀 mixer；沒在直播時是音軌 1
+- **安裝**：複製到上面的資料夾，不需要系統管理員權限。第一次安裝不用重開 Streamlabs，App 會叫它立刻載入（每次連線最多一次，且只在外掛沒回應時，避免載入兩次）；更新時 Streamlabs 必須先關閉，因為它開著時一直鎖住已載入的 DLL
+- **Streamlabs 的 libobs 不一樣的地方**：為了同時輸出橫式和直式畫面，它對每個畫面各混一次音，把混音送給每個音訊回呼，而且會把回呼的 `param` 當成 `obs_encoder` 讀取。所以 tap 傳一塊全零的 `param`、不請 libobs 轉換格式（libobs 的轉換器會同時吃到兩個畫面的聲音）、依時間戳記只留第一份（主畫面），再自己轉成 48 kHz。這在 OBS 上效果相同
+- **暫停直播聲音**：外掛直接改 libobs 的音軌設定，Streamlabs 自己記錄的音軌設定不變，所以暫停期間它存檔或當掉，存下的仍是原本的設定
+- 驗證：`node tools/verify-streamlabs-plugin.mjs`（載入、控制埠與 token、tap 取樣率、暫停／心跳／恢復／自動恢復、Streamlabs 的音軌設定不變，14 項）在實際的 Streamlabs（libobs 31.1.2sl）上通過
 
 | 平台 | 外掛資料夾 | 需要系統管理員權限 |
 |---|---|---|

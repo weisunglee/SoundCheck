@@ -8,7 +8,7 @@ Desktop. SoundCheck talks to one at a time through an adapter. UI text says 直�
 names the product (`{app}`) in steps that point at its menus.
 
 **Capabilities**: what the connected streaming software lets SoundCheck read and change.
-OBS supports everything; Streamlabs everything except level meters, balance and the plugin
+OBS supports everything; Streamlabs everything except source level meters and balance
 (its monitoring, tracks, sync offset and filters go through undocumented internal calls).
 
 **音訊來源 (audio source)**: an input in the streaming software that can make sound: a mic, desktop
@@ -30,8 +30,9 @@ reaches viewers if it is sent to a stream track.
 why: hidden, muted, monitor only, not on a stream track, or not in the scene. "Heard" sources are
 further split by whether sound is coming in right now (needs level meters).
 
-**外掛 (plugin)**: SoundCheck's own OBS plugin (`soundcheck`). It taps the stream mix and can
-pause stream audio; OBS only. Talks to the app through obs-websocket vendor requests.
+**外掛 (plugin)**: SoundCheck's own libobs plugin. It taps the stream mix and can pause stream
+audio. Two builds: `soundcheck` for OBS (talks through obs-websocket vendor requests) and
+`soundcheck-streamlabs` for Streamlabs (talks through a control port of its own).
 
 **直播混音 (stream mix)** and **tap**: the mixed audio of a stream track, copied to the app by the
 plugin's tap. Feeds the stream meter and the sound test.

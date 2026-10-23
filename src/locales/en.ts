@@ -338,7 +338,7 @@ const table: Record<string, string> = {
   "，其中 {n} 個現在沒有聲音進來": ", {n} of them silent right now",
   "，直播用的是音軌 {tracks}。": "; the stream uses track {tracks}.",
   "；另外 {n} 個在場景裡但觀眾聽不到": "; {n} more are in the scene but not heard",
-  "{app} 不提供音量表和左右平衡，也不能裝外掛，所以來源音量表、直播音量表和試音在 {app} 上無法使用；其他設定都可以正常調整。": "{app} provides no level meters or balance and can't load plugins, so source meters, the stream meter and the sound test aren't available in {app}; everything else works.",
+  "{app} 不提供來源音量表和左右平衡，所以這兩項在 {app} 上無法使用；直播音量表、試音和其他設定都可以正常使用。": "{app} provides no source level meters or balance, so those two aren't available in {app}; the stream meter, the sound test and everything else work.",
   "{app} 不支援設定檔。": "{app} doesn't support profiles.",
   "{app} 不提供音量表": "{app} doesn't provide level meters",
   "Streamlabs 沒有在執行": "Streamlabs isn't running",
@@ -350,6 +350,9 @@ const table: Record<string, string> = {
   "Streamlabs 沒有在執行，或還沒準備好。": "Streamlabs isn't running or isn't ready yet.",
   "連不上 Streamlabs。": "Can't connect to Streamlabs.",
   "這次會一併移除改名前的舊版外掛（obs-audio-kit）。": "This also removes the old plugin from before the rename (obs-audio-kit).",
+  "直播軟體開著時，舊版外掛的檔案會被鎖住、無法更新。請你自己關閉它，這樣可以先結束直播、存好設定。關閉後這裡會自動往下一步。": "While the streaming software runs, the old plugin's file is locked and can't be updated. Close it yourself, so you can end the stream and save your work first. This moves on by itself once it's closed.",
+  "載入外掛": "Load the plugin",
+  "直播軟體開啟時會自動載入新外掛，請開啟它。": "The streaming software loads the new plugin when it starts; please open it.",
 };
 
 export default table;

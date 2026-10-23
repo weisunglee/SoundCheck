@@ -3,6 +3,7 @@
 // An adapter leaves out the operations its program can't do, and capabilitiesOf() turns that
 // into what the UI shows, so "unsupported" is stated in exactly one place.
 import { msg } from "./i18n";
+import type { PluginLink } from "./plugin";
 import type { SoftwareId } from "./software";
 import type { AudioSource, ChannelLevels, MonitorType, Scene, SceneItem } from "./types";
 
@@ -89,6 +90,8 @@ export interface SoftwareAdapter {
   filters?: FilterOps;
   /** Name of the current scene collection; profiles warn when applied in another one. */
   sceneCollection?(): Promise<string>;
+  /** How requests reach the SoundCheck plugin inside the program (sound test, stream meter). */
+  plugin?: PluginLink;
 }
 
 export interface Capabilities {
@@ -98,7 +101,7 @@ export interface Capabilities {
   balance: boolean;
   syncOffset: boolean;
   filters: boolean;
-  /** The SoundCheck plugin (sound test, stream meter, installer) exists for OBS only. */
+  /** The SoundCheck plugin: sound test, stream meter, installer. */
   plugin: boolean;
   /** Profiles save and restore volume, mute, monitoring, sync offset, tracks and filters (and balance where there is one). */
   profiles: boolean;
@@ -112,7 +115,7 @@ export function capabilitiesOf(adapter: SoftwareAdapter): Capabilities {
     balance: Boolean(adapter.setBalance),
     syncOffset: Boolean(adapter.setSyncOffset),
     filters: Boolean(adapter.filters),
-    plugin: adapter.id === "obs",
+    plugin: Boolean(adapter.plugin),
   };
   return { ...caps, profiles: caps.monitoringControl && caps.tracksControl && caps.syncOffset && caps.filters };
 }

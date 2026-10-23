@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { loudnessVerdict } from "../loudnessVerdict";
-import { plugin } from "../plugin";
+import type { Plugin } from "../plugin";
 import { t } from "../i18n";
 
 interface Summary {
@@ -30,12 +30,13 @@ const fmtDb = (v: number | null, unit: string) => (v === null ? t("無聲") : `$
 const verdict = (s: Summary) => loudnessVerdict(s.loudnessLufs, s.peakDbfs, s.clippedSamples > 0);
 
 interface Props {
+  plugin: Plugin;
   /** Tells the app while playback has the stream silenced. */
   onPlayingChange: (playing: boolean) => void;
   onClose: () => void;
 }
 
-export function SoundTest({ onPlayingChange, onClose }: Props) {
+export function SoundTest({ plugin, onPlayingChange, onClose }: Props) {
   const [seconds, setSeconds] = useState(10);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const playingRef = useRef(false);

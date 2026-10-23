@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import { plugin } from "./plugin";
+import type { Plugin } from "./plugin";
 
 export interface StreamLevel {
   /** Peak per channel since the last update, 0..1. */
@@ -11,19 +11,19 @@ export interface StreamLevel {
 }
 
 const RESTART_MS = 2000;
-/** How often to check whether the stream switched to another track in OBS's output settings. */
+/** How often to check whether the stream switched to another track in the output settings. */
 const TRACK_CHECK_MS = 5000;
 
 /**
- * Runs the tap while `enabled` (this computer's OBS is connected and the plugin is loaded),
- * restarting it if it drops or if the stream starts using a different track.
+ * Runs the tap while `plugin` is set (software on this computer is connected and the plugin is
+ * loaded), restarting it if it drops or if the stream starts using a different track.
  */
-export function useStreamTap(enabled: boolean): { level: StreamLevel | null; running: boolean } {
+export function useStreamTap(plugin: Plugin | null): { level: StreamLevel | null; running: boolean } {
   const [level, setLevel] = useState<StreamLevel | null>(null);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!plugin) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     let tappedTrack: number | null = null;
@@ -85,7 +85,7 @@ export function useStreamTap(enabled: boolean): { level: StreamLevel | null; run
       setRunning(false);
       setLevel(null);
     };
-  }, [enabled]);
+  }, [plugin]);
 
   return { level, running };
 }

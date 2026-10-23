@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { type AddSourceStart, AddSourceWizard } from "./components/AddSourceWizard";
 import { ChannelStrip } from "./components/ChannelStrip";
 import { ConnectionGuide } from "./components/ConnectionGuide";
@@ -9,13 +9,14 @@ import { SceneList } from "./components/SceneList";
 import { SceneTable } from "./components/SceneTable";
 import { SoftwarePicker } from "./components/SoftwarePicker";
 import { SoundTest } from "./components/SoundTest";
+import { StreamlabsPluginInstall } from "./components/StreamlabsPluginInstall";
 import { statusLabel } from "./components/StatusBadge";
 import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
 import { useAudio } from "./audio";
 import { useConnection } from "./connection";
 import { obsAdapter } from "./obsAdapter";
-import { assessPlugin, pluginApplies, usePluginFiles, usePluginInfo } from "./plugin";
+import { assessPlugin, createPlugin, pluginApplies, usePluginFiles, usePluginInfo } from "./plugin";
 import { streamlabsAdapter } from "./streamlabsAdapter";
 import { SoundHold, type SourceWithStatus, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
@@ -48,12 +49,15 @@ export default function App() {
   const software = connection.kind === "connected" ? connection.software : null;
   const audio = useAudio(software === "obs" ? obsAdapter : software === "streamlabs" ? streamlabsAdapter : null);
   const { adapter, state, levels, capabilities: caps } = audio;
-  const pluginInfo = usePluginInfo(caps.plugin && state !== null);
+  const plugin = useMemo(() => (adapter?.plugin ? createPlugin(adapter.plugin) : null), [adapter]);
+  // Before connecting, the OBS installer applies (it doesn't need a connection).
+  const pluginFiles = usePluginFiles(software ?? "obs", 5000);
+  // Asked again when a new file is installed: Streamlabs can load it without a restart.
+  const pluginInfo = usePluginInfo(state !== null ? plugin : null, pluginFiles?.installedVersion);
   const pluginLoaded = Boolean(pluginInfo);
-  const pluginFiles = usePluginFiles(5000);
   const local = connection.kind === "connected" && connection.local;
-  const streamTap = useStreamTap(local && caps.plugin && pluginLoaded);
-  // The installer is for this computer's OBS only.
+  const streamTap = useStreamTap(local && pluginLoaded ? plugin : null);
+  // The installer is for software on this computer only.
   const need = pluginFiles && pluginApplies(connection) ? assessPlugin(pluginFiles, pluginInfo?.pluginVersion ?? null, pluginInfo !== undefined).need : "none";
   const NEED_LABELS = { install: t("安裝外掛"), update: t("更新外掛 {version}", { version: pluginFiles?.bundledVersion ?? "" }), notLoaded: t("外掛沒有載入") } as const;
 
@@ -127,7 +131,11 @@ export default function App() {
   // Rendered right after the header in both layouts below, so React keeps the dialog (and an
   // install in progress) when the app switches between "not connected" and the mixer.
   const pluginDialog = pluginOpen && (
-    <PluginInstall obsConnected={state !== null} loadedVersion={pluginInfo?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+    software === "streamlabs" ? (
+      <StreamlabsPluginInstall loadedVersion={pluginInfo?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+    ) : (
+      <PluginInstall obsConnected={state !== null} loadedVersion={pluginInfo?.pluginVersion ?? null} onClose={() => setPluginOpen(false)} />
+    )
   );
 
   if (!state) {
@@ -241,9 +249,9 @@ export default function App() {
                 </section>
               )}
 
-              {!caps.plugin && (
+              {!caps.meters && (
                 <p className="hint notice-inline">
-                  {t("{app} 不提供音量表和左右平衡，也不能裝外掛，所以來源音量表、直播音量表和試音在 {app} 上無法使用；其他設定都可以正常調整。")}
+                  {t("{app} 不提供來源音量表和左右平衡，所以這兩項在 {app} 上無法使用；直播音量表、試音和其他設定都可以正常使用。")}
                 </p>
               )}
 
@@ -283,7 +291,7 @@ export default function App() {
         </main>
       </div>
 
-      {soundTestOpen && <SoundTest onPlayingChange={setSoundTestPlaying} onClose={() => setSoundTestOpen(false)} />}
+      {soundTestOpen && plugin && <SoundTest plugin={plugin} onPlayingChange={setSoundTestPlaying} onClose={() => setSoundTestOpen(false)} />}
       {profilesOpen && adapter && <ProfilesDialog adapter={adapter} sources={sources} onClose={() => setProfilesOpen(false)} />}
       {addStart && adapter && (
         <AddSourceWizard

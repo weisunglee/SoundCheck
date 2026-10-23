@@ -23,7 +23,7 @@ describe("assessPlugin", () => {
     installed: true,
     installedVersion: "0.3.0",
     legacyInstalled: false,
-    obsRunning: true,
+    running: true,
     enabledInPluginManager: true,
     ...patch,
   });
@@ -46,10 +46,10 @@ describe("assessPlugin", () => {
 });
 
 describe("pluginApplies", () => {
-  it("applies to OBS on this computer and to connections not made yet", () => {
+  it("applies to software on this computer and to OBS connections not made yet", () => {
     expect(pluginApplies({ kind: "connected", software: "obs", version: "32", local: true })).toBe(true);
     expect(pluginApplies({ kind: "connected", software: "obs", version: "32", local: false })).toBe(false);
-    expect(pluginApplies({ kind: "connected", software: "streamlabs", version: "", local: true })).toBe(false);
+    expect(pluginApplies({ kind: "connected", software: "streamlabs", version: "", local: true })).toBe(true);
     expect(pluginApplies({ kind: "connecting" })).toBe(true);
     expect(pluginApplies({ kind: "failed", software: "streamlabs", reason: "streamlabsNotRunning", message: "", manual: false })).toBe(false);
   });

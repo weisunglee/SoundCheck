@@ -3,9 +3,12 @@
 // The documented API only sets volume, mute, scene and item visibility. Monitoring, tracks, sync
 // offset and filters go through Streamlabs' own internal objects, which its API forwards calls to
 // when the documented object lacks the method (AudioSource.setSettings, SourceFiltersService).
-// tools/verify-streamlabs.mjs checks those against a real install. There is no balance, and no
-// way to read levels from outside, so the adapter has neither.
+// tools/verify-streamlabs.ts checks those against a real install. There is no balance, and no
+// way to read levels from outside, so the adapter has neither. The SoundCheck plugin's Streamlabs
+// build (obs-plugin/src/plugin-streamlabs.cpp) brings the stream meter and sound test.
+import { invoke } from "@tauri-apps/api/core";
 import { AUDIO_FILTER_KINDS, type AudioState, type CaptureSettings, type FilterOps, INPUT_KIND_LABELS, type SoftwareAdapter } from "./adapter";
+import { NotLoadedError, type PluginLink } from "./plugin";
 import { iecDbToDeflection, streamlabs } from "./streamlabs";
 import { CAPTURE_KIND_SET } from "./systemAudio";
 import type { AudioSource, Filter, MonitorType, Scene } from "./types";
@@ -226,6 +229,55 @@ const filters: FilterOps = {
   },
 };
 
+const PLUGIN_MODULE = "soundcheck-streamlabs.dll";
+/** How long a freshly loaded plugin may take to open its control port. */
+const PLUGIN_LOAD_WAIT_MS = 3000;
+
+/** Set once this connection has asked Streamlabs to load the installed plugin. */
+let pluginLoad: Promise<boolean> | null = null;
+streamlabs.onClose(() => {
+  pluginLoad = null;
+});
+
+const sendToPlugin = (requestType: string, requestData: unknown) =>
+  invoke<{ ok?: boolean; error?: string }>("streamlabs_plugin_request", { requestType, requestData }).catch((e) => {
+    throw String(e) === "notLoaded" ? new NotLoadedError() : new Error(String(e));
+  });
+
+/**
+ * Streamlabs loads the plugin at startup; one installed while it runs is loaded through
+ * ObsUserPluginsService.initializeModule. That happens at most once per connection and only
+ * when the plugin answers nothing, since loading a module twice would run it twice.
+ */
+export function loadStreamlabsPlugin(): Promise<boolean> {
+  pluginLoad ??= (async () => {
+    const { installed } = await invoke<{ installed: boolean }>("streamlabs_plugin_status");
+    if (!installed) {
+      // Nothing to load yet; try again once something is installed.
+      pluginLoad = null;
+      return false;
+    }
+    await streamlabs.request("ObsUserPluginsService", "initializeModule", PLUGIN_MODULE);
+    for (let waited = 0; waited < PLUGIN_LOAD_WAIT_MS; waited += 200) {
+      if (await sendToPlugin("GetInfo", {}).then(() => true, () => false)) return true;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return false;
+  })();
+  return pluginLoad;
+}
+
+const pluginLink: PluginLink = {
+  async request(requestType, requestData) {
+    try {
+      return await sendToPlugin(requestType, requestData);
+    } catch (e) {
+      if (!(e instanceof NotLoadedError) || !(await loadStreamlabsPlugin())) throw e;
+      return sendToPlugin(requestType, requestData);
+    }
+  },
+};
+
 export const streamlabsAdapter: SoftwareAdapter = {
   id: "streamlabs",
   meters: false,
@@ -301,4 +353,5 @@ export const streamlabsAdapter: SoftwareAdapter = {
   },
   filters,
   sceneCollection: async () => (await streamlabs.request<{ name: string }>("SceneCollectionsService", "activeCollection")).name,
+  plugin: pluginLink,
 };

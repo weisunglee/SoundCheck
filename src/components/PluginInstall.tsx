@@ -20,9 +20,9 @@ interface Props {
   onClose: () => void;
 }
 
-type StepState = "done" | "active" | "waiting";
+export type StepState = "done" | "active" | "waiting";
 
-function Step({ n, title, state, children }: { n: number; title: string; state: StepState; children?: React.ReactNode }) {
+export function Step({ n, title, state, children }: { n: number; title: string; state: StepState; children?: React.ReactNode }) {
   return (
     <li className={`step step-${state}`}>
       <span className="step-n">{state === "done" ? "✓" : n}</span>
@@ -51,7 +51,7 @@ function useOutputsActive(enabled: boolean) {
 }
 
 export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
-  const status = usePluginFiles(1000);
+  const status = usePluginFiles("obs", 1000);
   const [install, setInstall] = useState<InstallState>({ kind: "idle" });
   const [launching, setLaunching] = useState<string | null>(null);
   const outputs = useOutputsActive(obsConnected);
@@ -62,7 +62,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
   const installed = install.kind === "done" || fileCurrent;
   const finished = installed && loadedCurrent;
 
-  const closeStep: StepState = installed || !status?.obsRunning ? "done" : "active";
+  const closeStep: StepState = installed || !status?.running ? "done" : "active";
   const installStep: StepState = installed ? "done" : closeStep === "done" ? "active" : "waiting";
   const openStep: StepState = finished ? "done" : installed ? "active" : "waiting";
 
@@ -71,7 +71,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
     if (!status) return;
     const snapshot =
       `steps close=${closeStep} install=${installStep} open=${openStep} finished=${finished} | ` +
-      `obsRunning=${status.obsRunning} connected=${obsConnected} loaded=${loadedVersion} ` +
+      `obsRunning=${status.running} connected=${obsConnected} loaded=${loadedVersion} ` +
       `file=${status.installed ? (status.installedVersion ?? "unknown") : "none"} bundled=${bundled} ` +
       `pluginManager=${status.enabledInPluginManager} install=${install.kind}` +
       (install.kind === "error" ? ` (${install.error.kind}: ${install.error.message})` : "");
@@ -161,7 +161,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
                       <button
                         type="button"
                         className="btn primary"
-                        disabled={install.kind === "installing" || status.obsRunning}
+                        disabled={install.kind === "installing" || status.running}
                         onClick={() => run("install_plugin")}
                       >
                         {install.kind === "installing" ? t("安裝中…") : install.kind === "error" ? t("再試一次") : t("安裝")}
@@ -171,7 +171,7 @@ export function PluginInstall({ obsConnected, loadedVersion, onClose }: Props) {
                 </Step>
 
                 <Step n={3} title={t("重新開啟直播軟體")} state={openStep}>
-                  {!status.obsRunning ? (
+                  {!status.running ? (
                     <>
                       <p className="hint">{t("直播軟體開啟時才會載入新外掛。")}</p>
                       <button type="button" className="btn primary" onClick={launch}>

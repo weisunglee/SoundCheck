@@ -121,7 +121,7 @@ fn bundled_path(app: &AppHandle) -> Option<PathBuf> {
 }
 
 /// The plugin version stored in the file itself (Windows version resource, macOS Info.plist).
-fn file_version(path: &Path) -> Option<String> {
+pub(crate) fn file_version(path: &Path) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         use pelite::pe64::{Pe, PeFile};
@@ -185,7 +185,7 @@ fn copy_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// Compares dotted versions by number, so "0.3" and "0.3.0" match (the Windows version
 /// resource always reads back as major.minor.patch). Same rule as `compareVersions` in the UI.
-fn same_version(a: &str, b: &str) -> bool {
+pub(crate) fn same_version(a: &str, b: &str) -> bool {
     let parts = |v: &str| v.split('.').map(|p| p.trim().parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
     let (pa, pb) = (parts(a), parts(b));
     (0..pa.len().max(pb.len())).all(|i| pa.get(i).unwrap_or(&0) == pb.get(i).unwrap_or(&0))

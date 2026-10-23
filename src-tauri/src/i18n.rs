@@ -22,6 +22,7 @@ const MESSAGES: &[[&str; 5]] = &[
     ["找不到播放裝置", "找不到播放设备", "No playback device found.", "再生デバイスが見つかりません。", "재생 장치를 찾을 수 없습니다."],
     ["不支援的播放格式：{format}", "不支持的播放格式：{format}", "Unsupported playback format: {format}", "対応していない再生形式です：{format}", "지원하지 않는 재생 형식입니다: {format}"],
     ["安裝後的外掛版本是 {found}，不是預期的 {expected}。", "安装后的插件版本是 {found}，不是预期的 {expected}。", "The installed plugin is version {found}, not the expected {expected}.", "インストールされたプラグインのバージョンは {found} で、想定の {expected} ではありません。", "설치된 플러그인 버전이 예상한 {expected}이(가) 아니라 {found}입니다."],
+    ["直播軟體正在使用舊版外掛。請先關閉直播軟體再安裝。", "直播软件正在使用旧版插件。请先关闭直播软件再安装。", "The streaming software is using the old plugin. Close it before installing.", "配信ソフトが古いプラグインを使用中です。配信ソフトを閉じてからインストールしてください。", "방송 프로그램이 이전 플러그인을 사용 중입니다. 방송 프로그램을 닫은 뒤 설치하세요."],
     ["直播軟體還開著。請先關閉它再安裝。", "直播软件还开着。请先关闭它再安装。", "The streaming software is still running. Close it before installing.", "配信ソフトが起動したままです。閉じてからインストールしてください。", "방송 프로그램이 아직 실행 중입니다. 닫은 뒤 설치하세요."],
     ["這個版本的 App 沒有附外掛。", "这个版本的 App 没有附带插件。", "This build of the app doesn't include the plugin.", "このバージョンのアプリにはプラグインが含まれていません。", "이 버전의 앱에는 플러그인이 포함되어 있지 않습니다."],
     ["找不到直播軟體的外掛資料夾。", "找不到直播软件的插件文件夹。", "Couldn't find the streaming software's plugin folder.", "配信ソフトのプラグインフォルダーが見つかりません。", "방송 프로그램의 플러그인 폴더를 찾을 수 없습니다."],

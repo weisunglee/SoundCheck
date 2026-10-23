@@ -6,6 +6,7 @@ mod plugin_install;
 mod profiles;
 mod slobs;
 mod sound_test;
+mod streamlabs_plugin;
 mod stream_tap;
 mod system_audio;
 
@@ -32,6 +33,9 @@ pub fn run() {
             plugin_install::install_plugin_elevated,
             plugin_install::launch_obs,
             plugin_install::log_install_event,
+            streamlabs_plugin::streamlabs_plugin_status,
+            streamlabs_plugin::install_streamlabs_plugin,
+            streamlabs_plugin::streamlabs_plugin_request,
             profiles::profiles_list,
             profiles::profile_save,
             profiles::profile_load,

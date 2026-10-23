@@ -2,14 +2,14 @@
 // and status code. Run on the machine where OBS runs:  npx tsx tools/inspect-obs.ts
 import { obs } from "../src/obsClient";
 import { obsAdapter } from "../src/obsAdapter";
-import { plugin } from "../src/plugin";
+import { obsPlugin } from "../src/plugin";
 import { scenesContaining, sourceStatus } from "../src/status";
 import { connectLocalObs } from "./connect-obs";
 
 await connectLocalObs();
 
 const state = await obsAdapter.load();
-const pluginInfo = await plugin.info().catch(() => null);
+const pluginInfo = await obsPlugin.info().catch(() => null);
 await obs.disconnect();
 
 console.log(`plugin: ${pluginInfo ? `loaded ${pluginInfo.pluginVersion}` : "missing"}, stream tracks: ${state.streamTracks.join(",")}`);

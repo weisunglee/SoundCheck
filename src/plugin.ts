@@ -1,31 +1,42 @@
-// The SoundCheck OBS plugin as the app sees it: the requests it answers (obs-websocket vendor
-// "soundcheck", see obs-plugin/src/plugin-main.cpp), what is installed on disk, and what the
-// user needs to do about it.
+// The SoundCheck plugin as the app sees it: the requests it answers (obs-plugin/src/requests.cpp),
+// how they reach it in each streaming software (a PluginLink, from the adapter), what is
+// installed on disk, and what the user needs to do about it.
 import { invoke } from "@tauri-apps/api/core";
 import { OBSWebSocketError } from "obs-websocket-js";
 import { useEffect, useState } from "react";
 import { t } from "./i18n";
 import type { ConnectionState } from "./connection";
+import type { SoftwareId } from "./software";
 import { obs } from "./obsClient";
 
-const VENDOR = "soundcheck";
+type RequestData = { [key: string]: string | number | boolean };
+
+/** Carries one request to the plugin and back; rejects with NotLoadedError when it isn't loaded. */
+export interface PluginLink {
+  request(requestType: string, requestData: RequestData): Promise<{ ok?: boolean; error?: string }>;
+}
+
+export class NotLoadedError extends Error {
+  constructor() {
+    super(t("直播軟體裡沒有安裝 SoundCheck 外掛，試音需要它。"));
+  }
+}
 
 /** obs-websocket answers 600 "No vendor was found by that name." when the plugin isn't loaded. */
 const NO_VENDOR = 600;
 
-async function request<T>(requestType: string, requestData: { [key: string]: string | number | boolean } = {}): Promise<T> {
-  try {
-    const { responseData } = await obs.call("CallVendorRequest", { vendorName: VENDOR, requestType, requestData });
-    const data = responseData as { ok?: boolean; error?: string };
-    if (data.ok === false) throw new Error(data.error ?? t("外掛回報失敗"));
-    return data as T;
-  } catch (e) {
-    if (e instanceof OBSWebSocketError && e.code === NO_VENDOR && /vendor/i.test(e.message)) {
-      throw new Error(t("直播軟體裡沒有安裝 SoundCheck 外掛，試音需要它。"));
+/** OBS: obs-websocket vendor requests to the "soundcheck" vendor (obs-plugin/src/plugin-obs.cpp). */
+export const obsPluginLink: PluginLink = {
+  async request(requestType, requestData) {
+    try {
+      const { responseData } = await obs.call("CallVendorRequest", { vendorName: "soundcheck", requestType, requestData });
+      return responseData as { ok?: boolean; error?: string };
+    } catch (e) {
+      if (e instanceof OBSWebSocketError && e.code === NO_VENDOR && /vendor/i.test(e.message)) throw new NotLoadedError();
+      throw e;
     }
-    throw e;
-  }
-}
+  },
+};
 
 export interface PluginInfo {
   pluginVersion: string;
@@ -45,31 +56,44 @@ export interface TapStarted {
   channels: number;
 }
 
-/** The plugin's requests. Every call rejects with a readable error if the plugin isn't loaded. */
-export const plugin = {
-  async info(): Promise<PluginInfo> {
-    const raw = await request<Omit<PluginInfo, "streamTracks"> & { streamTracks: { track: number }[] }>("GetInfo");
-    return { ...raw, streamTracks: raw.streamTracks.map((s) => s.track) };
-  },
-  /** Starts copying `track` (default: the first stream track) to a local socket; see stream_tap.rs. */
-  startTap: (track?: number) => request<TapStarted>("StartTap", track ? { track } : {}),
-  stopTap: () => request("StopTap"),
-  /** Takes every source off the stream tracks until resumed, or until heartbeats stop for `timeoutMs`. */
-  pauseStreamAudio: (timeoutMs: number) => request("PauseStreamAudio", { timeoutMs }),
-  heartbeat: () => request("Heartbeat"),
-  resumeStreamAudio: () => request("ResumeStreamAudio"),
-};
+export type Plugin = ReturnType<typeof createPlugin>;
+
+/** The plugin's requests over `link`. Every call rejects with a readable error if the plugin isn't loaded. */
+export function createPlugin(link: PluginLink) {
+  const request = async <T>(requestType: string, requestData: RequestData = {}): Promise<T> => {
+    const data = await link.request(requestType, requestData);
+    if (data.ok === false) throw new Error(data.error ?? t("外掛回報失敗"));
+    return data as T;
+  };
+  return {
+    async info(): Promise<PluginInfo> {
+      const raw = await request<Omit<PluginInfo, "streamTracks"> & { streamTracks: { track: number }[] }>("GetInfo");
+      return { ...raw, streamTracks: raw.streamTracks.map((s) => s.track) };
+    },
+    /** Starts copying `track` (default: the first stream track) to a local socket; see stream_tap.rs. */
+    startTap: (track?: number) => request<TapStarted>("StartTap", track ? { track } : {}),
+    stopTap: () => request("StopTap"),
+    /** Takes every source off the stream tracks until resumed, or until heartbeats stop for `timeoutMs`. */
+    pauseStreamAudio: (timeoutMs: number) => request("PauseStreamAudio", { timeoutMs }),
+    heartbeat: () => request("Heartbeat"),
+    resumeStreamAudio: () => request("ResumeStreamAudio"),
+  };
+}
+
+/** The plugin of the OBS that obs-websocket is connected to. */
+export const obsPlugin = createPlugin(obsPluginLink);
 
 /**
- * What the plugin reports once `active` (connected to OBS) turns true: null when it isn't
- * loaded, undefined until it has answered or while inactive. OBS only loads plugins at startup,
- * so one answer lasts for the whole connection.
+ * What `plugin` reports: null when it isn't loaded, undefined until it has answered or while
+ * `plugin` is null. Asked again when `plugin` or `refresh` changes (a new connection, or a new
+ * file installed); a plugin loads only when the software starts or is told to, so one answer
+ * holds until then.
  */
-export function usePluginInfo(active: boolean): PluginInfo | null | undefined {
+export function usePluginInfo(plugin: Plugin | null, refresh: unknown): PluginInfo | null | undefined {
   const [info, setInfo] = useState<PluginInfo | null | undefined>(undefined);
   useEffect(() => {
     setInfo(undefined);
-    if (!active) return;
+    if (!plugin) return;
     let alive = true;
     plugin.info().then(
       (i) => alive && setInfo(i),
@@ -78,29 +102,43 @@ export function usePluginInfo(active: boolean): PluginInfo | null | undefined {
     return () => {
       alive = false;
     };
-  }, [active]);
+  }, [plugin, refresh]);
   return info;
 }
 
-/** What is on disk and running, from plugin_install.rs. */
+/** What is on disk and running, from plugin_install.rs (OBS) or streamlabs_plugin.rs. */
 export interface PluginFiles {
-  /** Null when this build of the app has no plugin bundled. */
+  /** Null when this build of the app has no plugin bundled for the software. */
   bundledVersion: string | null;
   installed: boolean;
   installedVersion: string | null;
-  /** The plugin from before the rename (obs-audio-kit) is still there; installing removes it. */
+  /** OBS: the plugin from before the rename (obs-audio-kit) is still there; installing removes it. */
   legacyInstalled: boolean;
-  obsRunning: boolean;
+  /** The streaming software is running (it then holds a loaded plugin file locked). */
+  running: boolean;
+  /** OBS 32's plugin manager; null when it has no record, and always for Streamlabs. */
   enabledInPluginManager: boolean | null;
 }
 
-/** Polls the plugin files every `intervalMs`. */
-export function usePluginFiles(intervalMs: number): PluginFiles | null {
+async function readPluginFiles(software: SoftwareId): Promise<PluginFiles> {
+  if (software === "streamlabs") {
+    const s = await invoke<{ bundledVersion: string | null; installed: boolean; installedVersion: string | null; streamlabsRunning: boolean }>(
+      "streamlabs_plugin_status",
+    );
+    return { ...s, legacyInstalled: false, running: s.streamlabsRunning, enabledInPluginManager: null };
+  }
+  const { obsRunning, ...s } = await invoke<Omit<PluginFiles, "running"> & { obsRunning: boolean }>("plugin_status");
+  return { ...s, running: obsRunning };
+}
+
+/** Polls `software`'s plugin files every `intervalMs`. */
+export function usePluginFiles(software: SoftwareId, intervalMs: number): PluginFiles | null {
   const [files, setFiles] = useState<PluginFiles | null>(null);
   useEffect(() => {
     let alive = true;
+    setFiles(null);
     const poll = () =>
-      invoke<PluginFiles>("plugin_status")
+      readPluginFiles(software)
         .then((f) => alive && setFiles(f))
         .catch(() => {});
     poll();
@@ -109,7 +147,7 @@ export function usePluginFiles(intervalMs: number): PluginFiles | null {
       alive = false;
       clearInterval(id);
     };
-  }, [intervalMs]);
+  }, [software, intervalMs]);
   return files;
 }
 
@@ -131,15 +169,15 @@ export interface PluginAssessment {
   need: PluginNeed;
   /** The installed file is the bundled version or newer. */
   fileCurrent: boolean;
-  /** OBS has the bundled version (or newer) loaded right now. */
+  /** The software has the bundled version (or newer) loaded right now. */
   loadedCurrent: boolean;
 }
 
 /**
- * The one place that decides what the plugin situation is. `loadedVersion` is what OBS reports
- * (null if OBS isn't connected or the plugin isn't loaded).
+ * The one place that decides what the plugin situation is. `loadedVersion` is what the plugin
+ * reports (null if the software isn't connected or the plugin isn't loaded).
  */
-export function assessPlugin(files: PluginFiles, loadedVersion: string | null, obsConnected: boolean): PluginAssessment {
+export function assessPlugin(files: PluginFiles, loadedVersion: string | null, connected: boolean): PluginAssessment {
   const bundled = files.bundledVersion;
   const atLeastBundled = (v: string | null) => Boolean(bundled && v && compareVersions(v, bundled) >= 0);
   const fileCurrent = atLeastBundled(files.installedVersion);
@@ -150,18 +188,19 @@ export function assessPlugin(files: PluginFiles, loadedVersion: string | null, o
   else if (loadedVersion) need = loadedCurrent ? "none" : "update";
   else if (!files.installed) need = "install";
   else if (files.installedVersion && !fileCurrent) need = "update";
-  // Installed and current, but OBS is running without it (not restarted yet, or disabled).
-  else need = obsConnected ? "notLoaded" : "none";
+  // Installed and current, but the software runs without it (not restarted yet, or disabled).
+  else need = connected ? "notLoaded" : "none";
 
   return { need, fileCurrent, loadedCurrent };
 }
 
 /**
- * Whether the plugin matters for this connection: it is for OBS on this computer, so it applies
- * while connected to local OBS, and while not connected yet unless the attempt was Streamlabs.
+ * Whether the plugin matters for this connection: it is installed on this computer, so it
+ * applies while connected to software running here, and while not connected yet to OBS (whose
+ * install doesn't need a connection; Streamlabs' does, to load it).
  */
 export function pluginApplies(connection: ConnectionState): boolean {
-  if (connection.kind === "connected") return connection.software === "obs" && connection.local;
+  if (connection.kind === "connected") return connection.local;
   if (connection.kind === "failed") return connection.software === "obs";
   return true;
 }
