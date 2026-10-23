@@ -57,6 +57,8 @@ The cards stay in a fixed order (global devices first, then the software's own o
 
 ## Getting started
 
+Download SoundCheck from the [latest release](https://github.com/weisunglee/SoundCheck/releases/latest): the `-setup.exe` installer for Windows (or `x64-portable.zip` to run it without installing; keep the `obs-plugin` folder next to `SoundCheck.exe`), or the `.dmg` for macOS (Intel and Apple Silicon). The builds aren't code-signed yet: on Windows, SmartScreen may warn about an unknown publisher ("More info" → "Run anyway"); on macOS, right-click the app and choose Open the first time.
+
 1. **OBS**: in OBS, open *Tools → WebSocket Server Settings* and tick *Enable WebSocket server*. SoundCheck reads the port and password itself. **Streamlabs**: just have it open.
 2. Open SoundCheck. If it can't connect, it explains what to do.
 3. For the sound test and the stream meter (and source meters in Streamlabs), click **Install plugin** in the top right.

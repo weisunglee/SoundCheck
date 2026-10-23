@@ -160,10 +160,33 @@ jobs:
           tagName: ${{ needs.version.outputs.release == 'true' && format('v{0}', needs.version.outputs.version) || '' }}
           releaseName: ${{ needs.version.outputs.release == 'true' && format('SoundCheck v{0}', needs.version.outputs.version) || '' }}
           releaseBody: |
-            Windows: run the `.exe` (or `.msi`) installer. The app isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose "More info" → "Run anyway".
+            Windows: run the `-setup.exe` (or `.msi`) installer. Or, without installing, unzip `x64-portable.zip` and run `SoundCheck.exe`; keep the `obs-plugin` folder next to it. The app isn't code-signed yet, so Windows SmartScreen may warn about an unknown publisher: choose "More info" → "Run anyway".
             macOS: open the `.dmg` and drag SoundCheck to Applications. The app isn't notarized, so the first time, right-click it and choose "Open".
           releaseDraft: true
           prerelease: false
+
+      # The app runs from any folder as long as obs-plugin\ sits next to it, which is where it
+      # looks for the plugin to install.
+      - name: Pack the portable version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "SoundCheck_${{ needs.version.outputs.version }}_x64-portable.zip"
+          $dir = "portable/SoundCheck"
+          New-Item -ItemType Directory -Force "$dir/obs-plugin" | Out-Null
+          Copy-Item src-tauri/target/release/SoundCheck.exe $dir
+          Copy-Item obs-plugin/build_x64/RelWithDebInfo/soundcheck.dll, obs-plugin/build_x64_streamlabs/RelWithDebInfo/soundcheck-streamlabs.dll "$dir/obs-plugin"
+          # Windows' tar writes zip paths with "/", which every unzip tool reads.
+          tar -a -c -f "portable/$name" -C portable SoundCheck
+          Get-ChildItem portable -Recurse -File | ForEach-Object { "$($_.FullName)  $($_.Length)" }
+
+      - name: Add the portable version to the release (Windows)
+        if: runner.os == 'Windows' && needs.version.outputs.release == 'true'
+        # bash, so portable/*.zip is expanded (PowerShell passes it to gh as is).
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v${{ needs.version.outputs.version }}" portable/*.zip --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Keep the installers (no release)
         if: needs.version.outputs.release != 'true'
@@ -173,6 +196,7 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
+            portable/*.zip
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
 

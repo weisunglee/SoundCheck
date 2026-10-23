@@ -16,6 +16,8 @@
 
 ## 使用方式
 
+到[最新的 Release](https://github.com/weisunglee/SoundCheck/releases/latest) 下載：Windows 用 `-setup.exe` 安裝檔（或用 `x64-portable.zip` 免安裝版，解壓縮後直接執行 `SoundCheck.exe`，`obs-plugin` 資料夾要跟它放在一起），macOS 用 `.dmg`（Intel 和 Apple Silicon 都能用）。安裝檔目前沒有程式碼簽章：Windows 的 SmartScreen 可能警告「不明發行者」（按「其他資訊」→「仍要執行」），macOS 第一次開啟要按右鍵 →「打開」。
+
 1. 開啟直播軟體，在 OBS 的「工具 → WebSocket 伺服器設定」勾選「啟用 WebSocket 伺服器」。SoundCheck 會自動讀取連接埠和密碼，不用手動輸入。
 2. 開啟 SoundCheck。連不上時畫面會依原因一步一步說明。
 3. 想用試音和「觀眾聽到的」音量表，按右上角的「安裝外掛」。OBS 安裝時需要你自己關閉 OBS，裝好後 SoundCheck 會幫你重新開啟並確認外掛已載入；Streamlabs 第一次安裝不用重開，更新時才需要先關閉它。
