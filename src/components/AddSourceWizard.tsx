@@ -1,0 +1,307 @@
+import { useEffect, useRef, useState } from "react";
+import { obs } from "../obs";
+import {
+  CAPTURE_KINDS,
+  type SystemApp,
+  type SystemDevice,
+  appCoverage,
+  appLabel,
+  deviceCoverage,
+  loadCaptureSettings,
+  obsWindowString,
+  useSystemAudio,
+} from "../systemAudio";
+import type { AudioSource } from "../types";
+
+export type SoundKind = "input" | "output" | "app";
+
+/** Where the wizard can start: a kind, optionally with the device or app already picked. */
+export interface AddSourceStart {
+  kind?: SoundKind;
+  deviceId?: string;
+  app?: SystemApp;
+}
+
+interface Props {
+  sources: AudioSource[];
+  sceneOrder: string[];
+  programScene: string;
+  start?: AddSourceStart;
+  /** False when OBS runs on another computer: this computer's devices and apps would be wrong there. */
+  local: boolean;
+  onClose: () => void;
+}
+
+const KIND_CHOICES: { kind: SoundKind; title: string; detail: string }[] = [
+  { kind: "input", title: "麥克風或其他輸入", detail: "麥克風、混音器、擷取卡的聲音輸入" },
+  { kind: "output", title: "電腦播放的所有聲音", detail: "整台電腦從某個喇叭或耳機播出的聲音" },
+  { kind: "app", title: "某個應用程式的聲音", detail: "只收一個程式，例如遊戲、Spotify、Discord" },
+];
+
+/** "default" asks OBS to follow whatever the system default device is. */
+const DEFAULT_DEVICE = "default";
+/** OBS app capture matches the window by executable name (window_priority: class 0, title 1, exe 2). */
+const MATCH_BY_EXE = 2;
+
+type Pick = { kind: "input" | "output"; deviceId: string; name: string } | { kind: "app"; app: SystemApp; name: string };
+
+export function AddSourceWizard({ sources, sceneOrder, programScene, start, local, onClose }: Props) {
+  const [kind, setKind] = useState<SoundKind | null>(start?.kind ?? null);
+  const [pick, setPick] = useState<Pick | null>(null);
+  const [name, setName] = useState("");
+  const [allScenes, setAllScenes] = useState(false);
+  const [availableKinds, setAvailableKinds] = useState<Set<string> | null>(null);
+  const [captures, setCaptures] = useState<Awaited<ReturnType<typeof loadCaptureSettings>>>(new Map());
+  const [status, setStatus] = useState<{ kind: "idle" } | { kind: "adding" } | { kind: "done"; name: string } | { kind: "error"; message: string }>({
+    kind: "idle",
+  });
+  const system = useSystemAudio(local, 500);
+  const startApplied = useRef(false);
+
+  useEffect(() => {
+    obs
+      .call("GetInputKindList", { unversioned: true })
+      .then((r) => setAvailableKinds(new Set(r.inputKinds as string[])))
+      .catch(() => setAvailableKinds(new Set()));
+  }, []);
+  useEffect(() => {
+    loadCaptureSettings(sources).then(setCaptures);
+  }, [sources]);
+
+  const obsKind = (k: SoundKind) => CAPTURE_KINDS[k].find((x) => availableKinds?.has(x)) ?? null;
+  const devices = system?.devices ?? [];
+
+  const choose = (p: Pick) => {
+    setPick(p);
+    setName(uniqueName(p.name, sources));
+  };
+
+  // Jump straight to the confirm step once when the wizard was opened for a specific device or app;
+  // after that, going back must stay back.
+  useEffect(() => {
+    if (startApplied.current || !start) return;
+    if (start.app) {
+      startApplied.current = true;
+      choose({ kind: "app", app: start.app, name: appLabel(start.app) });
+    } else if (start.deviceId && start.kind && start.kind !== "app") {
+      const device = devices.find((d) => d.id === start.deviceId);
+      if (device) {
+        startApplied.current = true;
+        choose({ kind: start.kind, deviceId: device.id, name: device.name });
+      }
+    } else {
+      startApplied.current = true;
+    }
+  }, [start, devices]);
+
+  const add = async () => {
+    if (!pick) return;
+    const inputKind = obsKind(pick.kind);
+    if (!inputKind) return;
+    setStatus({ kind: "adding" });
+    try {
+      const inputName = name.trim();
+      const inputSettings: { [key: string]: string | number } =
+        pick.kind === "app" ? { window: obsWindowString(pick.app), priority: MATCH_BY_EXE } : { device_id: pick.deviceId };
+      const targets = allScenes ? sceneOrder : [programScene];
+      await obs.call("CreateInput", { sceneName: targets[0], inputName, inputKind, inputSettings, sceneItemEnabled: true });
+      for (const sceneName of targets.slice(1)) {
+        await obs.call("CreateSceneItem", { sceneName, sourceName: inputName, sceneItemEnabled: true });
+      }
+      setStatus({ kind: "done", name: inputName });
+    } catch (e) {
+      setStatus({ kind: "error", message: `OBS 沒有建立這個來源：${(e as Error).message}` });
+    }
+  };
+
+  const nameTaken = sources.some((s) => s.name === name.trim());
+
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="add-title">
+      <div className="dialog wide">
+        <div className="dialog-head">
+          <h2 id="add-title">新增聲音到 OBS</h2>
+          <button type="button" className="link" onClick={onClose}>
+            關閉
+          </button>
+        </div>
+
+        {status.kind === "done" ? (
+          <>
+            <div className="verdict verdict-ok">
+              已經把「{status.name}」加到{allScenes ? "所有場景" : `「${programScene}」`}。
+            </div>
+            <div className="row">
+              <button type="button" className="btn primary" onClick={onClose}>
+                完成
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setStatus({ kind: "idle" });
+                  setPick(null);
+                  setKind(null);
+                }}
+              >
+                再加一個
+              </button>
+            </div>
+          </>
+        ) : !kind ? (
+          <section className="wizard-section">
+            <h4 className="section-title">你想加入什麼聲音？</h4>
+            <div className="problems">
+              {KIND_CHOICES.map((c) => {
+                // Apps can only be listed for an OBS on this computer.
+                const supported = (availableKinds === null || obsKind(c.kind) !== null) && (local || c.kind !== "app");
+                return (
+                  <button key={c.kind} type="button" className="problem" disabled={!supported} onClick={() => setKind(c.kind)}>
+                    <span className="problem-title">{c.title}</span>
+                    <span className="problem-detail">
+                      {supported ? c.detail : local ? "這台電腦的 OBS 不支援" : "OBS 在另一台電腦時無法使用"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : !pick ? (
+          <section className="wizard-section">
+            <div className="row">
+              <button type="button" className="link" onClick={() => setKind(null)}>
+                ← 換一種聲音
+              </button>
+            </div>
+            <h4 className="section-title">{kind === "app" ? "選擇應用程式" : "選擇裝置"}</h4>
+            {kind === "app" ? (
+              <AppList apps={system?.apps ?? []} supported={system?.supported ?? true} captures={captures} devices={devices} onPick={(app) => choose({ kind: "app", app, name: appLabel(app) })} />
+            ) : (
+              <DeviceList
+                flow={kind === "input" ? "capture" : "render"}
+                devices={local ? devices : []}
+                captures={captures}
+                onPick={(deviceId, deviceName) => choose({ kind, deviceId, name: deviceName })}
+              />
+            )}
+          </section>
+        ) : (
+          <section className="wizard-section">
+            <div className="row">
+              <button type="button" className="link" onClick={() => setPick(null)}>
+                ← 重新選擇
+              </button>
+            </div>
+            <label className="field">
+              <span className="field-label">在 OBS 裡的名稱</span>
+              <input id="add-name" className="text-input" value={name} onChange={(e) => setName(e.target.value)} />
+              {nameTaken && <span className="hint">OBS 裡已經有這個名稱，請換一個。</span>}
+            </label>
+            <div className="field">
+              <span className="field-label">要加到哪裡？</span>
+              <label className="radio">
+                <input type="radio" name="add-where" checked={!allScenes} onChange={() => setAllScenes(false)} />
+                只有目前的場景「{programScene}」
+              </label>
+              <label className="radio">
+                <input type="radio" name="add-where" checked={allScenes} onChange={() => setAllScenes(true)} />
+                所有場景（{sceneOrder.length} 個）
+              </label>
+            </div>
+            {status.kind === "error" && <div className="verdict verdict-bad">{status.message}</div>}
+            <button type="button" className="btn primary" disabled={status.kind === "adding" || !name.trim() || nameTaken} onClick={add}>
+              {status.kind === "adding" ? "加入中…" : "加進 OBS"}
+            </button>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function uniqueName(base: string, sources: AudioSource[]): string {
+  const taken = new Set(sources.map((s) => s.name));
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`)) return `${base} ${n}`;
+}
+
+function Peak({ value }: { value: number }) {
+  const db = value > 0 ? 20 * Math.log10(value) : -60;
+  return (
+    <span className="mini-meter" aria-hidden="true">
+      <b style={{ width: `${Math.max(0, Math.min(1, (db + 60) / 60)) * 100}%` }} />
+    </span>
+  );
+}
+
+function DeviceList(props: {
+  flow: "render" | "capture";
+  devices: SystemDevice[];
+  captures: Awaited<ReturnType<typeof loadCaptureSettings>>;
+  onPick: (deviceId: string, name: string) => void;
+}) {
+  const list = props.devices.filter((d) => d.flow === props.flow);
+  const defaultLabel = props.flow === "capture" ? "跟著系統預設的麥克風" : "跟著系統預設的播放裝置";
+  return (
+    <ul className="pick-list">
+      <li>
+        <button type="button" className="pick" onClick={() => props.onPick(DEFAULT_DEVICE, props.flow === "capture" ? "麥克風" : "桌面音訊")}>
+          <span className="pick-title">{defaultLabel}</span>
+          <span className="pick-detail">換預設裝置時會自動跟著換，最不容易出錯。</span>
+        </button>
+      </li>
+      {list.map((d) => {
+        const coverage = deviceCoverage(d, props.captures, props.devices);
+        return (
+          <li key={d.id}>
+            <button type="button" className="pick" onClick={() => props.onPick(d.id, d.name)}>
+              <span className="pick-title">
+                {d.name}
+                {d.isDefault && <span className="tag">預設</span>}
+              </span>
+              <Peak value={d.peak} />
+              {coverage.sources.length > 0 && <span className="pick-detail">已在 OBS：{coverage.sources.join("、")}</span>}
+            </button>
+          </li>
+        );
+      })}
+      {list.length === 0 && <li className="hint">沒有可以列出的裝置清單（OBS 在另一台電腦，或這個平台還不支援），請用上面的預設選項。</li>}
+    </ul>
+  );
+}
+
+function AppList(props: {
+  apps: SystemApp[];
+  supported: boolean;
+  captures: Awaited<ReturnType<typeof loadCaptureSettings>>;
+  devices: SystemDevice[];
+  onPick: (app: SystemApp) => void;
+}) {
+  if (!props.supported) return <p className="hint">這個平台還不支援列出應用程式的聲音。</p>;
+  const apps = [...props.apps].sort((a, b) => b.peak - a.peak);
+  return (
+    <>
+      <p className="hint">只會列出正在播放聲音的程式。找不到的話，先讓那個程式發出聲音。</p>
+      <ul className="pick-list">
+        {apps.map((a) => {
+          const coverage = appCoverage(a, props.captures, props.devices);
+          return (
+            <li key={`${a.pid}-${a.deviceId}`}>
+              <button type="button" className="pick" onClick={() => props.onPick(a)}>
+                <span className="pick-title">{appLabel(a)}</span>
+                {a.windowTitle && <span className="pick-detail">{a.windowTitle}</span>}
+                <Peak value={a.peak} />
+                {coverage.sources.length > 0 && (
+                  <span className="pick-detail">
+                    {coverage.viaDevice ? `已經透過「${coverage.sources.join("、")}」收進 OBS` : `已在 OBS：${coverage.sources.join("、")}`}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+        {apps.length === 0 && <li className="hint">現在沒有程式在播放聲音。</li>}
+      </ul>
+    </>
+  );
+}

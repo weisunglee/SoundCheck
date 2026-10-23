@@ -13,10 +13,16 @@ export interface Filter {
 
 export interface AudioSource {
   name: string;
-  /** What the user recognises it as, e.g. "Shure MV7" or "Spotify". */
+  /** The kind of source in words the user recognises, e.g. "應用程式音訊擷取". */
   device: string;
+  /** OBS input kind without version suffix, e.g. "wasapi_input_capture". */
+  inputKind: string;
   volumeDb: number;
   muted: boolean;
+  /** Stereo balance: 0 is full left, 0.5 centre, 1 full right. */
+  balance: number;
+  /** Positive delays the audio, negative plays it earlier (milliseconds). */
+  syncOffsetMs: number;
   monitorType: MonitorType;
   filters: Filter[];
   /** Audio tracks (1-6) this source is sent to. */
@@ -43,7 +49,7 @@ export interface Scene {
 }
 
 /** Why a source can or can't be heard on stream in the current program scene. */
-export type SourceStatus = "live" | "hidden" | "muted" | "offStream" | "notInScene";
+export type SourceStatus = "live" | "hidden" | "muted" | "monitorOnly" | "offStream" | "notInScene";
 
 /** Per-channel meter position, 0..1, linear in dB from -60 dBFS to 0 dBFS. */
 export type ChannelLevels = [number, number];

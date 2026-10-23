@@ -1,14 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useRef, useState } from "react";
+import { type AddSourceStart, AddSourceWizard } from "./components/AddSourceWizard";
 import { ChannelStrip } from "./components/ChannelStrip";
+import { ConnectionGuide } from "./components/ConnectionGuide";
+import { FilterWizard } from "./components/FilterWizard";
 import { PluginInstall } from "./components/PluginInstall";
+import { ProfilesDialog } from "./components/ProfilesDialog";
 import { SceneList } from "./components/SceneList";
 import { SceneTable } from "./components/SceneTable";
 import { SoundTest } from "./components/SoundTest";
+import { StreamMeter } from "./components/StreamMeter";
+import { SystemSounds } from "./components/SystemSounds";
 import { useObsConnection } from "./obs";
 import { useObsAudio } from "./obsAudio";
 import { pluginNeed, usePluginStatus } from "./pluginStatus";
 import { itemsToShow, scenesContaining, sourceStatus } from "./status";
+import { useStreamTap } from "./streamTap";
 import type { AudioSource } from "./types";
 
 /** A meter position above this (about -57 dBFS) counts as "making sound". */
@@ -22,11 +28,18 @@ export default function App() {
   const [view, setView] = useState<View>("scene");
   const [soundTestOpen, setSoundTestOpen] = useState(false);
   const [pluginOpen, setPluginOpen] = useState(false);
+  const [filtersFor, setFiltersFor] = useState<string | null>(null);
+  const [addStart, setAddStart] = useState<AddSourceStart | null>(null);
+  const [soundTestPlaying, setSoundTestPlaying] = useState(false);
+  const [profilesOpen, setProfilesOpen] = useState(false);
   const connection = useObsConnection();
   const audio = useObsAudio(connection.kind === "connected");
   const { state, levels } = audio;
   const pluginStatus = usePluginStatus(5000);
-  const need = pluginStatus ? pluginNeed(pluginStatus, state?.pluginVersion ?? null, state !== null) : "none";
+  const local = connection.kind === "connected" && connection.local;
+  const streamTap = useStreamTap(local && (state?.pluginAvailable ?? false));
+  // The installer works on this computer's OBS only.
+  const need = pluginStatus && (local || connection.kind !== "connected") ? pluginNeed(pluginStatus, state?.pluginVersion ?? null, state !== null) : "none";
   const NEED_LABELS = { install: "安裝外掛", update: `更新外掛 ${pluginStatus?.bundledVersion}`, notLoaded: "外掛沒有載入" } as const;
 
   const lastSound = useRef<Record<string, number>>({});
@@ -41,7 +54,7 @@ export default function App() {
       <span className="brand">obs-audio-kit</span>
       <span className={`conn conn-${connection.kind}`} title={connection.kind === "failed" ? connection.message : undefined}>
         <i />
-        {connection.kind === "connected" && `已連線本機 OBS ${connection.obsVersion}`}
+        {connection.kind === "connected" && `已連線${connection.local ? "本機" : "另一台電腦的"} OBS ${connection.obsVersion}`}
         {connection.kind === "connecting" && "正在連線 OBS…"}
         {connection.kind === "failed" && "沒有連上 OBS"}
       </span>
@@ -56,6 +69,16 @@ export default function App() {
           </button>
         </div>
       )}
+      {state && (
+        <>
+          <button type="button" className="btn" onClick={() => setAddStart({})}>
+            ＋ 新增聲音
+          </button>
+          <button type="button" className="btn" onClick={() => setProfilesOpen(true)}>
+            設定檔
+          </button>
+        </>
+      )}
       {need !== "none" && (
         <button type="button" className="btn warn" onClick={() => setPluginOpen(true)}>
           {NEED_LABELS[need]}
@@ -64,8 +87,10 @@ export default function App() {
       <button
         type="button"
         className="btn primary"
-        disabled={!state?.pluginAvailable}
-        title={!state ? "連上 OBS 後才能試音" : !state.pluginAvailable ? "試音需要 obs-audio-kit 外掛" : undefined}
+        disabled={!state?.pluginAvailable || !local}
+        title={
+          !state ? "連上 OBS 後才能試音" : !local ? "OBS 在另一台電腦時無法試音" : !state.pluginAvailable ? "試音需要 obs-audio-kit 外掛" : undefined
+        }
         onClick={() => setSoundTestOpen(true)}
       >
         試音
@@ -86,16 +111,7 @@ export default function App() {
         {pluginDialog}
         <div className="empty">
           {connection.kind === "failed" ? (
-            <>
-              <h2>還沒連上 OBS</h2>
-              <p>{connection.message}</p>
-              {pluginStatus && !pluginStatus.obsRunning && (
-                <button type="button" className="btn primary" onClick={() => invoke("launch_obs").catch(() => {})}>
-                  開啟 OBS
-                </button>
-              )}
-              <p className="hint">連上之前會每 3 秒自動重試。</p>
-            </>
+            <ConnectionGuide failure={connection} obsRunning={pluginStatus?.obsRunning ?? null} />
           ) : (
             <p>{audio.error ?? "正在讀取 OBS 的聲音設定…"}</p>
           )}
@@ -126,7 +142,10 @@ export default function App() {
       onVolume={(db) => audio.setVolume(source.name, db)}
       onMuted={(m) => audio.setMuted(source.name, m)}
       onMonitorType={(t) => audio.setMonitorType(source.name, t)}
+      onBalance={(b) => audio.setBalance(source.name, b)}
+      onSyncOffset={(ms) => audio.setSyncOffset(source.name, ms)}
       onFilterEnabled={(f, on) => audio.setFilterEnabled(source.name, f, on)}
+      onOpenFilters={() => setFiltersFor(source.name)}
       onAddStreamTracks={() => audio.addStreamTracks(source.name)}
       onShow={() => audio.showInProgram(itemsToShow(programScene, source.name, scenes))}
     />
@@ -137,7 +156,7 @@ export default function App() {
       {header}
       {pluginDialog}
       {audio.error && <div className="error-bar">{audio.error}</div>}
-      {!state.pluginAvailable && (
+      {local && !state.pluginAvailable && (
         <div className="notice-bar">
           OBS 沒有載入 obs-audio-kit 外掛：試音無法使用，「沒送到直播」先假設直播用的是音軌 1。
           {need !== "none" && (
@@ -165,6 +184,19 @@ export default function App() {
                   {notHeard.length > 0 && <>；另外 {notHeard.length} 個在場景裡但觀眾聽不到</>}。
                 </p>
               </section>
+
+              {local && (
+              <StreamMeter
+                level={streamTap.level}
+                running={streamTap.running}
+                pluginLoaded={state.pluginAvailable}
+                streamPaused={soundTestPlaying}
+                sources={sources}
+                onInstallPlugin={() => setPluginOpen(true)}
+              />
+              )}
+
+              {local && <SystemSounds sources={sources} onAdd={setAddStart} />}
 
               {heard.length > 0 && (
                 <section>
@@ -214,7 +246,19 @@ export default function App() {
         </main>
       </div>
 
-      {soundTestOpen && <SoundTest onClose={() => setSoundTestOpen(false)} />}
+      {soundTestOpen && <SoundTest onPlayingChange={setSoundTestPlaying} onClose={() => setSoundTestOpen(false)} />}
+      {profilesOpen && <ProfilesDialog sources={sources} onClose={() => setProfilesOpen(false)} />}
+      {addStart && (
+        <AddSourceWizard
+          sources={sources}
+          sceneOrder={sceneOrder}
+          programScene={programScene}
+          start={addStart}
+          local={local}
+          onClose={() => setAddStart(null)}
+        />
+      )}
+      {filtersFor && <FilterWizard sourceName={filtersFor} inputDb={audio.inputDb[filtersFor] ?? null} onClose={() => setFiltersFor(null)} />}
     </div>
   );
 }

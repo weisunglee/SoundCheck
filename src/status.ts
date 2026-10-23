@@ -38,6 +38,8 @@ export function sourceStatus(
   if (presence === "absent") return "notInScene";
   if (presence === "hidden") return "hidden";
   if (source.muted) return "muted";
+  // OBS's "Monitor Only (mute output)" sends the source to the headphones only.
+  if (source.monitorType === "OBS_MONITORING_TYPE_MONITOR_ONLY") return "monitorOnly";
   if (!source.tracks.some((t) => streamTracks.includes(t))) return "offStream";
   return "live";
 }

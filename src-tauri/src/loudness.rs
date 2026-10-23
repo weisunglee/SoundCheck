@@ -119,6 +119,71 @@ fn integrated_loudness(samples: &[f32]) -> Option<f64> {
     Some(block_loudness(relative))
 }
 
+/// Loudness of a live stream, updated every 100 ms (BS.1770 momentary and short-term, ungated).
+pub struct LiveLoudness {
+    filters: Vec<(Biquad, Biquad)>,
+    step_energy: f64,
+    step_frames: usize,
+    steps: std::collections::VecDeque<f64>,
+}
+
+/// One 100 ms update of [`LiveLoudness`].
+pub struct LiveReading {
+    /// Last 400 ms, LUFS; `None` when silent.
+    pub momentary: Option<f64>,
+    /// Last 3 s, LUFS; `None` when silent.
+    pub short_term: Option<f64>,
+}
+
+const STEP_FRAMES: usize = SAMPLE_RATE as usize / 10;
+const SHORT_TERM_STEPS: usize = 30;
+
+impl Default for LiveLoudness {
+    fn default() -> Self {
+        Self {
+            filters: (0..CHANNELS).map(|_| k_weighting()).collect(),
+            step_energy: 0.0,
+            step_frames: 0,
+            steps: std::collections::VecDeque::with_capacity(SHORT_TERM_STEPS),
+        }
+    }
+}
+
+impl LiveLoudness {
+    /// Feeds interleaved stereo samples; returns a reading for every completed 100 ms step.
+    pub fn push(&mut self, samples: &[f32]) -> Vec<LiveReading> {
+        let mut readings = Vec::new();
+        for frame in samples.chunks_exact(CHANNELS) {
+            for (ch, &s) in frame.iter().enumerate() {
+                let (shelf, highpass) = &mut self.filters[ch];
+                let y = highpass.process(shelf.process(f64::from(s)));
+                self.step_energy += y * y;
+            }
+            self.step_frames += 1;
+            if self.step_frames == STEP_FRAMES {
+                if self.steps.len() == SHORT_TERM_STEPS {
+                    self.steps.pop_front();
+                }
+                self.steps.push_back(self.step_energy);
+                self.step_energy = 0.0;
+                self.step_frames = 0;
+                readings.push(self.reading());
+            }
+        }
+        readings
+    }
+
+    fn reading(&self) -> LiveReading {
+        let over = |n: usize| {
+            let n = n.min(self.steps.len());
+            let energy: f64 = self.steps.iter().rev().take(n).sum();
+            let mean = energy / (n * STEP_FRAMES) as f64;
+            (mean > 0.0).then(|| block_loudness(mean)).filter(|l| *l > -70.0)
+        };
+        LiveReading { momentary: over(4), short_term: over(SHORT_TERM_STEPS) }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +219,18 @@ mod tests {
     fn stereo_1khz_sine_loudness_matches_reference() {
         let lufs = summarize(&sine(1000.0, 1.0, 3.0)).loudness_lufs.unwrap();
         assert!(lufs.abs() < 0.2, "got {lufs}");
+    }
+
+    #[test]
+    fn live_short_term_matches_integrated_for_steady_tone() {
+        let tone = sine(1000.0, 0.1, 3.0);
+        let mut live = LiveLoudness::default();
+        let readings = live.push(&tone);
+        assert_eq!(readings.len(), 30);
+        let last = readings.last().unwrap();
+        assert!((last.short_term.unwrap() + 20.0).abs() < 0.3, "got {:?}", last.short_term);
+        assert!((last.momentary.unwrap() + 20.0).abs() < 0.3);
+        assert!(live.push(&vec![0.0; 48_000 * 2 * 4]).last().unwrap().short_term.is_none());
     }
 
     #[test]

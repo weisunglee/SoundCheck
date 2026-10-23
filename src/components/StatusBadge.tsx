@@ -7,6 +7,7 @@ const LABELS: Record<BadgeKind, string> = {
   silent: "目前沒聲音",
   hidden: "已隱藏",
   muted: "已靜音",
+  monitorOnly: "只有你聽得到",
   offStream: "沒送到直播",
   notInScene: "不在這個場景",
 };

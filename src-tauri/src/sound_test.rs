@@ -1,11 +1,9 @@
 //! Record-then-playback sound test.
 //!
-//! Recording reads the plugin's tap (48 kHz stereo f32le over local TCP).
+//! Recording takes a slice of the live tap (see `stream_tap`).
 //! Playback never runs while recording, so a playback device that OBS also
 //! captures cannot feed back into the recording.
 
-use std::io::Read;
-use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -16,10 +14,9 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::loudness::{self, Summary, CHANNELS, SAMPLE_RATE};
+use crate::stream_tap::StreamTapState;
 
 pub const MAX_SECONDS: f64 = 15.0;
-/// How often the UI gets a level update while recording.
-const LEVEL_INTERVAL_FRAMES: usize = SAMPLE_RATE as usize / 20;
 
 #[derive(Default)]
 pub struct SoundTest {
@@ -32,32 +29,31 @@ pub type SoundTestState = Arc<SoundTest>;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct LevelEvent {
-    elapsed_sec: f64,
-    /// Peak per channel over the last interval, 0..1.
-    peaks: [f32; CHANNELS],
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct PlaybackEvent {
     position_sec: f64,
     duration_sec: f64,
 }
 
-/// Records up to `seconds` (capped at 15) from the tap on `port`, or until stopped.
+/// Records up to `seconds` (capped at 15) of the stream mix from the live tap, or until stopped.
 #[tauri::command]
 pub async fn sound_test_record(
-    app: AppHandle,
     state: State<'_, SoundTestState>,
-    port: u16,
+    tap: State<'_, StreamTapState>,
     seconds: f64,
 ) -> Result<Summary, String> {
     let test = state.inner().clone();
+    let tap = tap.inner().clone();
     let seconds = seconds.clamp(1.0, MAX_SECONDS);
-    tauri::async_runtime::spawn_blocking(move || record(&app, &test, port, seconds))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        test.stop_recording.store(false, Ordering::SeqCst);
+        let mut samples = tap.record(seconds, &test.stop_recording)?;
+        samples.truncate(samples.len() / CHANNELS * CHANNELS);
+        let summary = loudness::summarize(&samples);
+        *test.recording.lock().unwrap() = samples;
+        Ok(summary)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -77,50 +73,6 @@ pub async fn sound_test_play(app: AppHandle, state: State<'_, SoundTestState>) -
 #[tauri::command]
 pub fn sound_test_stop_playback(state: State<'_, SoundTestState>) {
     state.stop_playback.store(true, Ordering::SeqCst);
-}
-
-fn record(app: &AppHandle, test: &SoundTest, port: u16, seconds: f64) -> Result<Summary, String> {
-    test.stop_recording.store(false, Ordering::SeqCst);
-    let mut socket = TcpStream::connect(("127.0.0.1", port)).map_err(|e| format!("無法連到 OBS 外掛：{e}"))?;
-    socket.set_read_timeout(Some(Duration::from_millis(200))).map_err(|e| e.to_string())?;
-
-    let target_samples = (seconds * f64::from(SAMPLE_RATE)) as usize * CHANNELS;
-    let mut samples: Vec<f32> = Vec::with_capacity(target_samples);
-    let mut pending: Vec<u8> = Vec::new();
-    let mut buf = [0u8; 16 * 1024];
-    let mut next_level_at = LEVEL_INTERVAL_FRAMES * CHANNELS;
-
-    while samples.len() < target_samples && !test.stop_recording.load(Ordering::SeqCst) {
-        let n = match socket.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => continue,
-            Err(e) => return Err(format!("讀取聲音時中斷：{e}")),
-        };
-        pending.extend_from_slice(&buf[..n]);
-        let whole = pending.len() / 4 * 4;
-        samples.extend(pending[..whole].chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
-        pending.drain(..whole);
-
-        while samples.len() >= next_level_at {
-            let start = next_level_at - LEVEL_INTERVAL_FRAMES * CHANNELS;
-            let mut peaks = [0f32; CHANNELS];
-            for frame in samples[start..next_level_at].chunks_exact(CHANNELS) {
-                for (p, s) in peaks.iter_mut().zip(frame) {
-                    *p = p.max(s.abs());
-                }
-            }
-            let elapsed_sec = (next_level_at / CHANNELS) as f64 / f64::from(SAMPLE_RATE);
-            let _ = app.emit("sound-test-level", LevelEvent { elapsed_sec, peaks });
-            next_level_at += LEVEL_INTERVAL_FRAMES * CHANNELS;
-        }
-    }
-
-    samples.truncate(target_samples);
-    samples.truncate(samples.len() / CHANNELS * CHANNELS);
-    let summary = loudness::summarize(&samples);
-    *test.recording.lock().unwrap() = samples;
-    Ok(summary)
 }
 
 fn play(app: &AppHandle, test: &SoundTest) -> Result<(), String> {

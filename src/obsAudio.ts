@@ -66,6 +66,7 @@ const STRUCTURE_EVENTS = [
   "SourceFilterCreated",
   "SourceFilterRemoved",
   "SourceFilterNameChanged",
+  "SourceFilterListReindexed",
   "CurrentSceneCollectionChanged",
 ] as const;
 
@@ -124,7 +125,15 @@ export async function loadState(): Promise<ObsAudioState> {
 
   const globalNames = new Set(Object.values(special).filter((v): v is string => typeof v === "string"));
   const inputs = inputList.inputs as { inputName: string; inputKind: string; unversionedInputKind: string }[];
-  const PER_INPUT = ["GetInputAudioTracks", "GetInputVolume", "GetInputMute", "GetInputAudioMonitorType", "GetSourceFilterList"];
+  const PER_INPUT = [
+    "GetInputAudioTracks",
+    "GetInputVolume",
+    "GetInputMute",
+    "GetInputAudioMonitorType",
+    "GetSourceFilterList",
+    "GetInputAudioBalance",
+    "GetInputAudioSyncOffset",
+  ];
   const perInput = await batch(
     inputs.flatMap(({ inputName }) =>
       PER_INPUT.map((requestType) => ({
@@ -136,15 +145,18 @@ export async function loadState(): Promise<ObsAudioState> {
 
   const sources: AudioSource[] = [];
   inputs.forEach((input, i) => {
-    const [tracks, volume, mute, monitor, filters] = perInput.slice(i * PER_INPUT.length, (i + 1) * PER_INPUT.length);
+    const [tracks, volume, mute, monitor, filters, balance, sync] = perInput.slice(i * PER_INPUT.length, (i + 1) * PER_INPUT.length);
     // Video-only inputs (images, colour sources…) reject the audio requests.
     if (!tracks.ok || !volume.ok) return;
     const trackMap = tracks.data.inputAudioTracks as Record<string, boolean>;
     sources.push({
       name: input.inputName,
       device: INPUT_KIND_LABELS[input.unversionedInputKind] ?? input.unversionedInputKind,
+      inputKind: input.unversionedInputKind,
       volumeDb: volume.data.inputVolumeDb as number,
       muted: mute.data.inputMuted as boolean,
+      balance: (balance.data.inputAudioBalance as number | undefined) ?? 0.5,
+      syncOffsetMs: (sync.data.inputAudioSyncOffset as number | undefined) ?? 0,
       monitorType: monitor.data.monitorType as MonitorType,
       filters: ((filters.data.filters ?? []) as { filterName: string; filterKind: string; filterEnabled: boolean }[])
         .filter((f) => AUDIO_FILTER_KINDS.has(f.filterKind))
@@ -182,10 +194,14 @@ export async function loadState(): Promise<ObsAudioState> {
 export interface ObsAudio {
   state: ObsAudioState | null;
   levels: Record<string, ChannelLevels>;
+  /** Pre-fader input peak per source in dBFS (absent while silent), for filter tuning. */
+  inputDb: Record<string, number>;
   error: string | null;
   setVolume: (name: string, db: number) => void;
   setMuted: (name: string, muted: boolean) => void;
   setMonitorType: (name: string, type: MonitorType) => void;
+  setBalance: (name: string, balance: number) => void;
+  setSyncOffset: (name: string, ms: number) => void;
   setFilterEnabled: (source: string, filter: string, enabled: boolean) => void;
   addStreamTracks: (name: string) => void;
   showInProgram: (items: { sceneName: string; item: SceneItem }[]) => void;
@@ -196,6 +212,7 @@ export interface ObsAudio {
 export function useObsAudio(connected: boolean): ObsAudio {
   const [state, setState] = useState<ObsAudioState | null>(null);
   const [levels, setLevels] = useState<Record<string, ChannelLevels>>({});
+  const [inputDb, setInputDb] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -223,6 +240,8 @@ export function useObsAudio(connected: boolean): ObsAudio {
       ["InputVolumeChanged", (e) => patchSource(e.inputName, (s) => ({ ...s, volumeDb: e.inputVolumeDb }))],
       ["InputMuteStateChanged", (e) => patchSource(e.inputName, (s) => ({ ...s, muted: e.inputMuted }))],
       ["InputAudioMonitorTypeChanged", (e) => patchSource(e.inputName, (s) => ({ ...s, monitorType: e.monitorType }))],
+      ["InputAudioBalanceChanged", (e) => patchSource(e.inputName, (s) => ({ ...s, balance: e.inputAudioBalance }))],
+      ["InputAudioSyncOffsetChanged", (e) => patchSource(e.inputName, (s) => ({ ...s, syncOffsetMs: e.inputAudioSyncOffset }))],
       [
         "InputAudioTracksChanged",
         (e) =>
@@ -259,13 +278,17 @@ export function useObsAudio(connected: boolean): ObsAudio {
         "InputVolumeMeters",
         (e) => {
           const next: Record<string, ChannelLevels> = {};
+          const nextInput: Record<string, number> = {};
           for (const input of e.inputs as { inputName: string; inputLevelsMul: number[][] }[]) {
-            // inputLevelsMul is [channel][magnitude, peak, inputPeak]; use the post-fader peak.
+            // inputLevelsMul is [channel][magnitude, peak, inputPeak]; meters use the post-fader peak.
             const [l, r] = input.inputLevelsMul;
             const left = meterPosition(l?.[1] ?? 0);
             next[input.inputName] = [left, r ? meterPosition(r[1]) : left];
+            const rawPeak = Math.max(0, ...input.inputLevelsMul.map((ch) => ch[2] ?? 0));
+            if (rawPeak > 0) nextInput[input.inputName] = 20 * Math.log10(rawPeak);
           }
           setLevels(next);
+          setInputDb(nextInput);
         },
       ],
       ...STRUCTURE_EVENTS.map((name): [string, () => void] => [name, reload]),
@@ -283,6 +306,7 @@ export function useObsAudio(connected: boolean): ObsAudio {
   return {
     state,
     levels,
+    inputDb,
     error,
     setVolume: (name, db) => {
       patchSource(name, (s) => ({ ...s, volumeDb: db }));
@@ -295,6 +319,16 @@ export function useObsAudio(connected: boolean): ObsAudio {
     setMonitorType: (name, monitorType) => {
       patchSource(name, (s) => ({ ...s, monitorType }));
       send(obs.call("SetInputAudioMonitorType", { inputName: name, monitorType }));
+    },
+    setBalance: (name, balance) => {
+      patchSource(name, (s) => ({ ...s, balance }));
+      send(obs.call("SetInputAudioBalance", { inputName: name, inputAudioBalance: balance }));
+    },
+    setSyncOffset: (name, requested) => {
+      // OBS accepts -950 ms to 20000 ms.
+      const ms = Math.max(-950, Math.min(20000, requested));
+      patchSource(name, (s) => ({ ...s, syncOffsetMs: ms }));
+      send(obs.call("SetInputAudioSyncOffset", { inputName: name, inputAudioSyncOffset: ms }));
     },
     setFilterEnabled: (sourceName, filterName, filterEnabled) => {
       patchSource(sourceName, (s) => ({ ...s, filters: s.filters.map((f) => (f.name === filterName ? { ...f, enabled: filterEnabled } : f)) }));

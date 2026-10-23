@@ -9,7 +9,7 @@ interface Props {
   onSwitch: (scene: string) => void;
 }
 
-const LEGEND: SourceStatus[] = ["live", "hidden", "muted", "offStream", "notInScene"];
+const LEGEND: SourceStatus[] = ["live", "hidden", "muted", "monitorOnly", "offStream", "notInScene"];
 
 /** Every audio source against every scene, so the user can see where each sound plays. */
 export function SceneTable({ sources, scenes, programScene, statusIn, onSwitch }: Props) {
@@ -52,7 +52,16 @@ export function SceneTable({ sources, scenes, programScene, statusIn, onSwitch }
         {LEGEND.map((k) => (
           <span key={k}>
             <StatusDot kind={k} />
-            {{ live: "觀眾聽得到", hidden: "已隱藏", muted: "已靜音", offStream: "沒送到直播", notInScene: "不在這個場景" }[k]}
+            {
+              {
+                live: "觀眾聽得到",
+                hidden: "已隱藏",
+                muted: "已靜音",
+                monitorOnly: "只有你聽得到",
+                offStream: "沒送到直播",
+                notInScene: "不在這個場景",
+              }[k]
+            }
           </span>
         ))}
       </div>

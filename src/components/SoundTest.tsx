@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
+import { loudnessVerdict } from "../loudnessVerdict";
 import { pluginRequest } from "../obs";
 
 interface Summary {
@@ -25,27 +26,15 @@ const HEARTBEAT_MS = 1000;
 
 const fmtDb = (v: number | null, unit: string) => (v === null ? "無聲" : `${v.toFixed(1)} ${unit}`);
 
-/**
- * Plain-language read of a recording. These are rough rules of thumb for a
- * first prototype, using YouTube's -14 LUFS normalization target as the reference.
- */
-function verdict(s: Summary): { tone: "ok" | "warn" | "bad"; text: string } {
-  if (s.peakDbfs === null || s.loudnessLufs === null) {
-    return { tone: "bad", text: "錄到的聲音幾乎是無聲。觀眾現在聽不到任何東西，請確認音訊來源有送到直播音軌。" };
-  }
-  if (s.clippedSamples > 0 || s.peakDbfs > -1) {
-    return { tone: "bad", text: "有爆音。最大聲的地方已經頂到上限，觀眾會聽到破音，請把最大聲的來源調小。" };
-  }
-  if (s.loudnessLufs < -24) {
-    return { tone: "warn", text: `整體偏小（${s.loudnessLufs.toFixed(0)} LUFS），觀眾可能要把音量開很大才聽得清楚。` };
-  }
-  if (s.loudnessLufs > -10) {
-    return { tone: "warn", text: `整體偏大（${s.loudnessLufs.toFixed(0)} LUFS），長時間聽會覺得吵。` };
-  }
-  return { tone: "ok", text: `音量適中（${s.loudnessLufs.toFixed(0)} LUFS）。` };
+const verdict = (s: Summary) => loudnessVerdict(s.loudnessLufs, s.peakDbfs, s.clippedSamples > 0);
+
+interface Props {
+  /** Tells the app while playback has the stream silenced. */
+  onPlayingChange: (playing: boolean) => void;
+  onClose: () => void;
 }
 
-export function SoundTest({ onClose }: { onClose: () => void }) {
+export function SoundTest({ onPlayingChange, onClose }: Props) {
   const [seconds, setSeconds] = useState(10);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const playingRef = useRef(false);
@@ -65,22 +54,19 @@ export function SoundTest({ onClose }: { onClose: () => void }) {
 
   const record = async () => {
     setPhase({ kind: "recording", elapsed: 0, peaks: [0, 0] });
-    let tapStarted = false;
     try {
-      const { port } = await pluginRequest<{ port: number }>("StartTap");
-      tapStarted = true;
-      const summary = await invoke<Summary>("sound_test_record", { port, seconds });
+      // The app keeps the stream tap running; recording takes the next `seconds` of it.
+      const summary = await invoke<Summary>("sound_test_record", { seconds });
       setPhase({ kind: "recorded", summary });
     } catch (e) {
       setPhase({ kind: "error", message: String((e as Error).message ?? e) });
-    } finally {
-      if (tapStarted) await pluginRequest("StopTap").catch(() => {});
     }
   };
 
   const play = async (summary: Summary) => {
     setPhase({ kind: "playing", summary, position: 0 });
     playingRef.current = true;
+    onPlayingChange(true);
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
       await pluginRequest("PauseStreamAudio", { timeoutMs: PAUSE_TIMEOUT_MS });
@@ -92,6 +78,7 @@ export function SoundTest({ onClose }: { onClose: () => void }) {
     } finally {
       clearInterval(heartbeat);
       playingRef.current = false;
+      onPlayingChange(false);
       await pluginRequest("ResumeStreamAudio").catch(() => {});
     }
   };
