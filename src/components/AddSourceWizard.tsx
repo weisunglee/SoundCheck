@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { obs } from "../obs";
 import {
@@ -40,6 +41,8 @@ const KIND_CHOICES: { kind: SoundKind; title: string; detail: string }[] = [
 
 /** "default" asks OBS to follow whatever the system default device is. */
 const DEFAULT_DEVICE = "default";
+/** How long a microphone preview stays open (matches the backend's limit). */
+const LISTEN_LIMIT_MS = 30_000;
 /** OBS app capture matches the window by executable name (window_priority: class 0, title 1, exe 2). */
 const MATCH_BY_EXE = 2;
 
@@ -55,8 +58,34 @@ export function AddSourceWizard({ sources, sceneOrder, programScene, start, loca
   const [status, setStatus] = useState<{ kind: "idle" } | { kind: "adding" } | { kind: "done"; name: string } | { kind: "error"; message: string }>({
     kind: "idle",
   });
-  const system = useSystemAudio(local, 500);
+  const [listening, setListening] = useState<string | null>(null);
+  const [listenError, setListenError] = useState<string | null>(null);
+  // Poll faster while previewing a microphone, so its meter reacts to speech.
+  const system = useSystemAudio(local, listening ? 150 : 500);
   const startApplied = useRef(false);
+  const listenTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const stopListening = () => {
+    clearTimeout(listenTimer.current);
+    setListening(null);
+    invoke("device_listen_stop").catch(() => {});
+  };
+  const toggleListen = (id: string) => {
+    if (listening === id) return stopListening();
+    setListenError(null);
+    invoke("device_listen_start", { id })
+      .then(() => {
+        setListening(id);
+        clearTimeout(listenTimer.current);
+        // The backend also closes the device after 30 s; keep the button in step with it.
+        listenTimer.current = setTimeout(() => setListening(null), LISTEN_LIMIT_MS);
+      })
+      .catch((e: string) => setListenError(e));
+  };
+  useEffect(() => () => {
+    clearTimeout(listenTimer.current);
+    invoke("device_listen_stop").catch(() => {});
+  }, []);
 
   useEffect(() => {
     obs
@@ -96,6 +125,7 @@ export function AddSourceWizard({ sources, sceneOrder, programScene, start, loca
 
   const add = async () => {
     if (!pick) return;
+    stopListening();
     const inputKind = obsKind(pick.kind);
     if (!inputKind) return;
     setStatus({ kind: "adding" });
@@ -181,7 +211,12 @@ export function AddSourceWizard({ sources, sceneOrder, programScene, start, loca
                 flow={kind === "input" ? "capture" : "render"}
                 devices={local ? devices : []}
                 captures={captures}
-                onPick={(deviceId, deviceName) => choose({ kind, deviceId, name: deviceName })}
+                listening={listening}
+                onListen={local && kind === "input" ? toggleListen : undefined}
+                onPick={(deviceId, deviceName) => {
+                  stopListening();
+                  choose({ kind, deviceId, name: deviceName });
+                }}
               />
             )}
           </section>
@@ -192,6 +227,20 @@ export function AddSourceWizard({ sources, sceneOrder, programScene, start, loca
                 ← 重新選擇
               </button>
             </div>
+            {pick.kind === "input" && pick.deviceId !== DEFAULT_DEVICE && local && (
+              <div className="field">
+                <span className="field-label">確認是這個裝置</span>
+                <div className="pick-row">
+                  <span className="pick-title">{devices.find((d) => d.id === pick.deviceId)?.name ?? pick.name}</span>
+                  <button type="button" className="btn small" onClick={() => toggleListen(pick.deviceId)}>
+                    {listening === pick.deviceId ? "停止試聽" : "試聽"}
+                  </button>
+                </div>
+                {listening === pick.deviceId && <Peak value={devices.find((d) => d.id === pick.deviceId)?.peak ?? 0} />}
+                <span className="hint">按「試聽」後對著它說話，音量條有跳就是這一個。試聽時 Windows 會顯示麥克風使用中。</span>
+              </div>
+            )}
+            {listenError && <div className="verdict verdict-bad">{listenError}</div>}
             <label className="field">
               <span className="field-label">在 OBS 裡的名稱</span>
               <input id="add-name" className="text-input" value={name} onChange={(e) => setName(e.target.value)} />
@@ -238,6 +287,10 @@ function DeviceList(props: {
   flow: "render" | "capture";
   devices: SystemDevice[];
   captures: Awaited<ReturnType<typeof loadCaptureSettings>>;
+  /** Recording device currently opened for a level preview. */
+  listening: string | null;
+  /** Present when recording devices can be previewed. */
+  onListen?: (deviceId: string) => void;
   onPick: (deviceId: string, name: string) => void;
 }) {
   const list = props.devices.filter((d) => d.flow === props.flow);
@@ -250,18 +303,26 @@ function DeviceList(props: {
           <span className="pick-detail">換預設裝置時會自動跟著換，最不容易出錯。</span>
         </button>
       </li>
+      {props.onListen && <li className="hint">不知道是哪一個？按「試聽」再對著麥克風說話，音量條有跳的就是它。</li>}
       {list.map((d) => {
         const coverage = deviceCoverage(d, props.captures, props.devices);
+        const isListening = props.listening === d.id;
         return (
-          <li key={d.id}>
+          <li key={d.id} className="pick-item">
             <button type="button" className="pick" onClick={() => props.onPick(d.id, d.name)}>
               <span className="pick-title">
                 {d.name}
                 {d.isDefault && <span className="tag">預設</span>}
+                {isListening && <span className="tag">試聽中</span>}
               </span>
               <Peak value={d.peak} />
               {coverage.sources.length > 0 && <span className="pick-detail">已在 OBS：{coverage.sources.join("、")}</span>}
             </button>
+            {props.onListen && (
+              <button type="button" className="btn small" onClick={() => props.onListen!(d.id)}>
+                {isListening ? "停止試聽" : "試聽"}
+              </button>
+            )}
           </li>
         );
       })}

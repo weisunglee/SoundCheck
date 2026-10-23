@@ -35,6 +35,8 @@ pub fn run() {
             sound_test::sound_test_play,
             sound_test::sound_test_stop_playback,
             system_audio::system_audio_snapshot,
+            system_audio::device_listen_start,
+            system_audio::device_listen_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

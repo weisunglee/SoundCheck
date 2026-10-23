@@ -8,6 +8,7 @@ import { ProfilesDialog } from "./components/ProfilesDialog";
 import { SceneList } from "./components/SceneList";
 import { SceneTable } from "./components/SceneTable";
 import { SoundTest } from "./components/SoundTest";
+import { STATUS_LABELS } from "./components/StatusBadge";
 import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
 import { useObsConnection } from "./obs";
@@ -32,6 +33,16 @@ export default function App() {
   const [addStart, setAddStart] = useState<AddSourceStart | null>(null);
   const [soundTestPlaying, setSoundTestPlaying] = useState(false);
   const [profilesOpen, setProfilesOpen] = useState(false);
+  const [flashing, setFlashing] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Scrolls to a source's card and highlights it briefly; the layout itself never changes.
+  const jumpTo = (name: string) => {
+    document.getElementById(stripId(name))?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlashing(name);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashing(null), 1600);
+  };
   const connection = useObsConnection();
   const audio = useObsAudio(connection.kind === "connected");
   const { state, levels } = audio;
@@ -124,9 +135,15 @@ export default function App() {
   const statusIn = (s: AudioSource, scene: string) => sourceStatus(s, scene, scenes, streamTracks);
 
   const withStatus = sources.map((s) => ({ source: s, status: statusIn(s, programScene) }));
-  const heard = withStatus.filter((x) => x.status === "live");
+  // One list in a fixed order (global devices first, then OBS's own order), so a card never
+  // moves when its status changes and muting can be undone with a second click in the same spot.
+  const inScene = [
+    ...withStatus.filter((x) => x.status !== "notInScene" && x.source.global),
+    ...withStatus.filter((x) => x.status !== "notInScene" && !x.source.global),
+  ];
+  const heard = inScene.filter((x) => x.status === "live");
   const silent = heard.filter((x) => !sounding(x.source.name));
-  const notHeard = withStatus.filter((x) => x.status !== "live" && x.status !== "notInScene");
+  const notHeard = inScene.filter((x) => x.status !== "live");
   const elsewhere = withStatus.filter((x) => x.status === "notInScene");
 
   const heardCount = Object.fromEntries(sceneOrder.map((sc) => [sc, sources.filter((s) => statusIn(s, sc) === "live").length]));
@@ -134,6 +151,8 @@ export default function App() {
   const strip = ({ source, status }: (typeof withStatus)[number]) => (
     <ChannelStrip
       key={source.name}
+      id={stripId(source.name)}
+      flash={flashing === source.name}
       source={source}
       status={status}
       sounding={sounding(source.name)}
@@ -183,6 +202,20 @@ export default function App() {
                   {silent.length > 0 && <>，其中 {silent.length} 個現在沒有聲音進來</>}
                   {notHeard.length > 0 && <>；另外 {notHeard.length} 個在場景裡但觀眾聽不到</>}。
                 </p>
+                {(notHeard.length > 0 || silent.length > 0) && (
+                  <div className="jump-list">
+                    {notHeard.map(({ source, status }) => (
+                      <button key={source.name} type="button" className="chip jump" onClick={() => jumpTo(source.name)}>
+                        {source.name}：{STATUS_LABELS[status]}
+                      </button>
+                    ))}
+                    {silent.map(({ source }) => (
+                      <button key={source.name} type="button" className="chip jump quiet" onClick={() => jumpTo(source.name)}>
+                        {source.name}：{STATUS_LABELS.silent}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </section>
 
               {local && (
@@ -196,21 +229,14 @@ export default function App() {
               />
               )}
 
+              {inScene.length > 0 && (
+                <section>
+                  <h4 className="section-title">這個場景的聲音（淡色虛線框的觀眾聽不到）</h4>
+                  <div className="mixer">{inScene.map(strip)}</div>
+                </section>
+              )}
+
               {local && <SystemSounds sources={sources} onAdd={setAddStart} />}
-
-              {heard.length > 0 && (
-                <section>
-                  <h4 className="section-title">觀眾聽得到</h4>
-                  <div className="mixer">{heard.map(strip)}</div>
-                </section>
-              )}
-
-              {notHeard.length > 0 && (
-                <section>
-                  <h4 className="section-title">在這個場景，但觀眾聽不到</h4>
-                  <div className="mixer">{notHeard.map(strip)}</div>
-                </section>
-              )}
 
               {elsewhere.length > 0 && (
                 <section>
@@ -262,3 +288,5 @@ export default function App() {
     </div>
   );
 }
+
+const stripId = (name: string) => `strip-${encodeURIComponent(name)}`;

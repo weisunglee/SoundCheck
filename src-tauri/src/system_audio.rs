@@ -50,6 +50,51 @@ pub async fn system_audio_snapshot() -> Result<SystemAudio, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Longest a level preview keeps a microphone open, in case the UI never stops it.
+#[cfg(target_os = "windows")]
+const LISTEN_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Opens a recording device briefly so Windows reports its level in `system_audio_snapshot`.
+/// Windows only measures a microphone while some program records from it.
+#[tauri::command]
+pub async fn device_listen_start(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || listen_start(id)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn device_listen_stop() {
+    listen_stop();
+}
+
+static LISTENING: std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> = std::sync::Mutex::new(None);
+
+fn listen_stop() {
+    if let Some(stop) = LISTENING.lock().unwrap().take() {
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn listen_start(_id: String) -> Result<(), String> {
+    Err("這個平台還不支援試聽音量".into())
+}
+
+#[cfg(target_os = "windows")]
+fn listen_start(id: String) -> Result<(), String> {
+    listen_stop();
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (ready, opened) = std::sync::mpsc::channel();
+    let thread_stop = stop.clone();
+    // The capture stream lives on its own thread, which drains it until told to stop.
+    std::thread::spawn(move || win::listen(&id, &thread_stop, ready));
+    opened
+        .recv()
+        .map_err(|_| "試聽失敗".to_string())?
+        .map_err(|e| format!("無法開啟這個裝置：{e}"))?;
+    *LISTENING.lock().unwrap() = Some(stop);
+    Ok(())
+}
+
 #[cfg(not(target_os = "windows"))]
 fn snapshot() -> Result<SystemAudio, String> {
     Ok(SystemAudio {
@@ -200,6 +245,63 @@ mod win {
         }
     }
 
+    /// Records from `id` and throws the audio away until `stop`, so its level meter runs.
+    pub fn listen(
+        id: &str,
+        stop: &std::sync::atomic::AtomicBool,
+        ready: std::sync::mpsc::Sender<std::result::Result<(), String>>,
+    ) {
+        use std::sync::atomic::Ordering;
+        use windows::Win32::Media::Audio::{AUDCLNT_SHAREMODE_SHARED, IAudioCaptureClient, IAudioClient};
+        use windows::core::HSTRING;
+
+        const ONE_SECOND_HNS: i64 = 10_000_000;
+        let open = || -> Result<(IAudioClient, IAudioCaptureClient)> {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+                let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+                let device = enumerator.GetDevice(&HSTRING::from(id))?;
+                let client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
+                let format = client.GetMixFormat()?;
+                let init = client.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, ONE_SECOND_HNS, 0, format, None);
+                CoTaskMemFree(Some(format as _));
+                init?;
+                let capture: IAudioCaptureClient = client.GetService()?;
+                client.Start()?;
+                Ok((client, capture))
+            }
+        };
+        let (client, capture) = match open() {
+            Ok(pair) => {
+                let _ = ready.send(Ok(()));
+                pair
+            }
+            Err(e) => {
+                let _ = ready.send(Err(e.message()));
+                return;
+            }
+        };
+
+        let started = std::time::Instant::now();
+        while !stop.load(Ordering::SeqCst) && started.elapsed() < super::LISTEN_LIMIT {
+            unsafe {
+                while capture.GetNextPacketSize().unwrap_or(0) > 0 {
+                    let mut data = std::ptr::null_mut();
+                    let mut frames = 0u32;
+                    let mut flags = 0u32;
+                    if capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None).is_err() {
+                        break;
+                    }
+                    let _ = capture.ReleaseBuffer(frames);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        unsafe {
+            let _ = client.Stop();
+        }
+    }
+
     unsafe fn collect_sessions(
         device: &IMMDevice,
         device_id: &str,
@@ -274,6 +376,30 @@ mod tests {
         }
         for a in &s.apps {
             println!("app {} pid={} peak={:.4} title={:?} class={:?}", a.exe, a.pid, a.peak, a.window_title, a.window_class);
+        }
+    }
+
+    /// Opens every recording device in turn and prints the level Windows reports while it is open.
+    #[test]
+    #[ignore]
+    fn print_listen_levels() {
+        let devices: Vec<_> = super::snapshot().unwrap().devices.into_iter().filter(|d| d.flow == "capture").collect();
+        for d in devices {
+            match super::listen_start(d.id.clone()) {
+                Ok(()) => {
+                    let mut peak = 0f32;
+                    for _ in 0..10 {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        let now = super::snapshot().unwrap();
+                        if let Some(x) = now.devices.iter().find(|x| x.id == d.id) {
+                            peak = peak.max(x.peak);
+                        }
+                    }
+                    super::listen_stop();
+                    println!("listen {:.4} {}", peak, d.name);
+                }
+                Err(e) => println!("listen ERR {} {}", d.name, e),
+            }
         }
     }
 }

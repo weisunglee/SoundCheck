@@ -43,6 +43,9 @@ export function SystemSounds({ sources, onAdd }: Props) {
     .filter((d) => d.flow === "render" && recent(`dev:${d.id}`, d.peak))
     .map((d) => ({ device: d, coverage: deviceCoverage(d, captures, system.devices) }));
   const missing = apps.filter((a) => a.coverage.sources.length === 0).length;
+  // Windows only reports a microphone's level while something records it, so inputs that OBS
+  // doesn't capture are listed without a level; the add wizard can preview one.
+  const missingInputs = system.devices.filter((d) => d.flow === "capture" && deviceCoverage(d, captures, system.devices).sources.length === 0);
 
   return (
     <section>
@@ -90,6 +93,28 @@ export function SystemSounds({ sources, onAdd }: Props) {
               </li>
             ))}
         </ul>
+      )}
+
+      {missingInputs.length > 0 && (
+        <details className="inputs-missing">
+          <summary>還沒加進 OBS 的輸入裝置（{missingInputs.length} 個）</summary>
+          <p className="hint">麥克風、混音器、擷取卡等輸入。沒有程式在錄的裝置無法顯示音量；不確定是哪一個時，按「加進 OBS」後可以試聽。</p>
+          <ul className="elsewhere">
+            {missingInputs.map((d) => (
+              <li key={d.id}>
+                <div>
+                  <div className="src-name">
+                    {d.name}
+                    {d.isDefault && <span className="tag">預設</span>}
+                  </div>
+                </div>
+                <button type="button" className="chip" onClick={() => onAdd({ kind: "input", deviceId: d.id })}>
+                  加進 OBS
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

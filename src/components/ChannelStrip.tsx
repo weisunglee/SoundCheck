@@ -16,6 +16,10 @@ const RECOMMENDED_DB: [number, number] = [-20, -9];
 const SYNC_STEP_MS = 10;
 
 interface Props {
+  /** DOM id, so the summary can scroll to this card. */
+  id: string;
+  /** Briefly highlighted after the user jumped to it. */
+  flash: boolean;
   source: AudioSource;
   status: SourceStatus;
   sounding: boolean;
@@ -42,7 +46,7 @@ export function ChannelStrip(props: Props) {
   const faderDb = Math.max(FADER_MIN_DB, Math.min(0, source.volumeDb));
 
   return (
-    <div className={heard ? "strip" : "strip dimmed"}>
+    <div id={props.id} className={`strip${heard ? "" : " dimmed"}${props.flash ? " flash" : ""}`}>
       <div className="strip-head">
         <div>
           <h3>{source.name}</h3>

@@ -2,7 +2,7 @@ import type { SourceStatus } from "../types";
 
 export type BadgeKind = SourceStatus | "silent";
 
-const LABELS: Record<BadgeKind, string> = {
+export const STATUS_LABELS: Record<BadgeKind, string> = {
   live: "正在出聲",
   silent: "目前沒聲音",
   hidden: "已隱藏",
@@ -13,10 +13,10 @@ const LABELS: Record<BadgeKind, string> = {
 };
 
 export function StatusBadge({ kind }: { kind: BadgeKind }) {
-  return <span className={`badge badge-${kind}`}>{LABELS[kind]}</span>;
+  return <span className={`badge badge-${kind}`}>{STATUS_LABELS[kind]}</span>;
 }
 
 /** The small dot used in the scene list and the scene table. */
 export function StatusDot({ kind, title }: { kind: SourceStatus; title?: string }) {
-  return <span className={`dot dot-${kind}`} title={title ?? LABELS[kind]} aria-label={title ?? LABELS[kind]} />;
+  return <span className={`dot dot-${kind}`} title={title ?? STATUS_LABELS[kind]} aria-label={title ?? STATUS_LABELS[kind]} />;
 }
