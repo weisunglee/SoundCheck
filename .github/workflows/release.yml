@@ -57,7 +57,9 @@ jobs:
       matrix:
         include:
           - name: Windows
-            os: windows-latest
+            # The plugin's CMake preset uses the Visual Studio 2022 generator; newer runner
+            # images have only later versions.
+            os: windows-2022
             args: ""
           - name: macOS
             # Xcode 16 (macOS 15 SDK) is what OBS's plugin build requires.
