@@ -92,8 +92,11 @@ export interface SoftwareAdapter {
   sceneCollection?(): Promise<string>;
   /** How requests reach the SoundCheck plugin inside the program (sound test, stream meter). */
   plugin?: PluginLink;
-  /** The plugin adds its voice EQ and analyzer filters to this program (voice tuning). */
-  voiceFilters?: boolean;
+  /**
+   * The first plugin version whose build for this program adds the voice EQ and analyzer filters
+   * (voice tuning); missing where it has none.
+   */
+  voiceFilters?: string;
 }
 
 export interface Capabilities {

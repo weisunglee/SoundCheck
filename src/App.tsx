@@ -364,6 +364,7 @@ export default function App() {
           ops={adapter.filters}
           source={sources.find((s) => s.name === voiceFor)!}
           plugin={plugin}
+          needVersion={adapter.voiceFilters ?? ""}
           pluginVersion={pluginInfo === undefined ? undefined : (pluginInfo?.pluginVersion ?? null)}
           canInstall={local}
           onInstallPlugin={() => {
