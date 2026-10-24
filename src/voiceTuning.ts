@@ -46,7 +46,8 @@ export interface VoiceAnalysis {
   loudnessLufs: number | null;
   pitchHz: number | null;
   pitchLowHz: number | null;
-  bands: { freq: number; deviationDb: number }[];
+  /** Against average speech, dB; tunedDb is the same after the planned voice EQ (null without a plan). */
+  bands: { freq: number; deviationDb: number; tunedDb: number | null }[];
   issues: { kind: IssueKind; blocking: boolean }[];
   plan: VoicePlan | null;
 }
