@@ -173,7 +173,7 @@ pub fn analyze(samples: &[f32], rate: u32) -> Analysis {
     let voiced = voice_activity(&frame_db);
     let voiced_db: Vec<f64> = frame_db.iter().zip(&voiced).filter(|(_, v)| **v).map(|(d, _)| *d).collect();
     let voiced_sec = voiced_db.len() as f64 * FRAME_SEC;
-    let noise_dbfs = (!frame_db.is_empty()).then(|| percentile(&frame_db, 0.1));
+    let noise_dbfs = noise_floor(&frame_db);
     let speech_dbfs = (!voiced_db.is_empty()).then(|| percentile(&voiced_db, 0.5));
 
     let mut analysis = Analysis {
@@ -308,13 +308,22 @@ fn round_to(v: f64, step: f64) -> f64 {
     (v / step).round() * step + 0.0
 }
 
+/// Level of the background, dBFS: the quietest 2% of the 20 ms frames. People asked to talk
+/// leave few real pauses, so anything higher (like the 10th percentile) lands on the fading ends
+/// of words instead. Digital silence (a dropout, a muted start) isn't the background and is left
+/// out, so it can't pull the estimate down; a single odd frame can't move the 2nd percentile much.
+fn noise_floor(frame_db: &[f64]) -> Option<f64> {
+    let heard: Vec<f64> = frame_db.iter().copied().filter(|&db| db > -100.0).collect();
+    (!heard.is_empty()).then(|| percentile(&heard, 0.02))
+}
+
 /// Which 20 ms frames have someone talking: well above the background, not too far below the
 /// loudest talking, and with a short hold so the ends of words count.
 fn voice_activity(frame_db: &[f64]) -> Vec<bool> {
     if frame_db.is_empty() {
         return Vec::new();
     }
-    let noise = percentile(frame_db, 0.1);
+    let noise = noise_floor(frame_db).unwrap_or(-120.0);
     let loud = percentile(frame_db, 0.95);
     let threshold = (noise + 10.0).max(loud - 35.0).max(-65.0);
     const HOLD: usize = 3;
@@ -698,15 +707,19 @@ mod tests {
         tilt: Vec<(f64, f64, f64)>,
         /// Bursts of 5-9 kHz noise this loud (amplitude), like "s" sounds.
         hiss: f64,
+        /// Talking on and on: syllables run into each other with only the fading ends of words
+        /// between them, and a short breath every 3 s.
+        connected: bool,
     }
 
     impl Default for Voice {
         fn default() -> Self {
-            Self { f0: 120.0, seconds: 12.0, level: 0.3, noise: 0.0003, tilt: Vec::new(), hiss: 0.0 }
+            Self { f0: 120.0, seconds: 12.0, level: 0.3, noise: 0.0003, tilt: Vec::new(), hiss: 0.0, connected: false }
         }
     }
 
-    /// Syllables of a harmonic voice shaped like the LTASS, 4 per second, with a pause every 3 s.
+    /// Syllables of a harmonic voice shaped like the LTASS, 4 per second, with a pause every 3 s
+    /// (or, when connected, a 0.1 s breath and syllables that fade out without a gap).
     fn voice(v: &Voice) -> Vec<f32> {
         let fs = f64::from(FS);
         let frames = (v.seconds * fs) as usize;
@@ -733,9 +746,18 @@ mod tests {
         (0..frames)
             .map(|i| {
                 let t = i as f64 / fs;
-                let in_pause = t % 3.0 > 2.4;
+                let in_pause = t % 3.0 > if v.connected { 2.9 } else { 2.4 };
                 let syllable = (t * 4.0).fract();
-                let env = if in_pause || syllable > 0.75 { 0.0 } else { (PI * syllable / 0.75).sin() };
+                let env = if in_pause {
+                    0.0
+                } else if v.connected {
+                    // Up in 75 ms, then down about 25 dB by the next syllable.
+                    if syllable < 0.3 { (PI * syllable / 0.6).sin() } else { (-4.1 * (syllable - 0.3)).exp() }
+                } else if syllable > 0.75 {
+                    0.0
+                } else {
+                    (PI * syllable / 0.75).sin()
+                };
                 // Each syllable a little louder or softer, and the pitch moving a bit.
                 let strength = 0.5 + 0.5 * ((t * 4.0).floor() * 1.7).sin().abs();
                 let pitch = 1.0 + 0.08 * (2.0 * PI * 0.7 * t).sin();
@@ -927,6 +949,30 @@ mod tests {
     fn some_background_noise_adds_noise_suppression() {
         let a = analyze(&voice(&Voice { noise: 0.006, ..Voice::default() }), FS);
         assert!(plan(&a).noise_suppression, "{:?} speech {:?} noise {:?}", a.issues, a.speech_dbfs, a.noise_dbfs);
+    }
+
+    #[test]
+    fn talking_without_pauses_is_not_mistaken_for_heavy_noise() {
+        // Talking almost without a break, as people do when asked to keep talking: the quietest
+        // 10% of the recording is the ends of words, not the background, which is at -52 dBFS.
+        let a = analyze(&voice(&Voice { connected: true, level: 0.35, noise: 0.004_35, ..Voice::default() }), FS);
+        let (speech, noise) = (a.speech_dbfs.unwrap(), a.noise_dbfs.unwrap());
+        assert!((-54.0..=-50.0).contains(&noise), "noise {noise}");
+        assert!((-30.0..=-24.0).contains(&speech), "speech {speech}");
+        assert!(!a.issues.iter().any(|i| i.kind == IssueKind::TooNoisy), "{:?}", a.issues);
+        assert!(plan(&a).noise_suppression, "{:?}", a.issues);
+    }
+
+    #[test]
+    fn digital_silence_does_not_hide_the_background() {
+        // A muted second at the start (and a dropout) must not make the noise look lower.
+        let mut samples = voice(&Voice { noise: 0.006, ..Voice::default() });
+        samples[..FS as usize].fill(0.0);
+        samples[FS as usize * 5..FS as usize * 5 + 2000].fill(0.0);
+        let a = analyze(&samples, FS);
+        let noise = a.noise_dbfs.unwrap();
+        assert!(noise > -52.0, "noise {noise}");
+        assert!(plan(&a).noise_suppression, "{:?}", a.issues);
     }
 
     #[test]

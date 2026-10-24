@@ -210,7 +210,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                   ))}
                 </div>
                 <p className="hint">
-                  {t("在平常直播的位置，用平常的音量一直說話，例如念一段文章或介紹今天要玩什麼。錄的是麥克風本身的聲音，不會經過現有的濾鏡，觀眾也不會聽到任何變化。")}
+                  {t("在平常直播的位置，用平常的音量像直播時一樣說話，例如念一段文章或介紹今天要玩什麼，有自然的停頓沒關係。錄的是麥克風本身的聲音，不會經過現有的濾鏡，觀眾也不會聽到任何變化。")}
                 </p>
                 <button type="button" className="btn primary" onClick={record}>
                   <Icon name="mic" size={15} />
@@ -235,7 +235,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
             <div className="progress">
               <b style={{ width: `${Math.min(1, phase.elapsed / seconds) * 100}%` }} />
             </div>
-            <p className="hint">{t("請一直說話。")}</p>
+            <p className="hint">{t("像平常直播一樣說話，有自然的停頓沒關係。")}</p>
             <button type="button" className="btn" onClick={() => (stopRef.current = true)}>
               <Icon name="square" size={15} />
               {t("提前停止")}
