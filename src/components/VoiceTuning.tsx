@@ -21,6 +21,7 @@ import {
 } from "../voiceTuning";
 import { Icon, IconButton } from "./Icon";
 import { meterFill } from "./LevelMeter";
+import { SpectrumChart } from "./SpectrumChart";
 
 const DURATIONS = [15, 20];
 const POLL_MS = 250;
@@ -294,6 +295,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                       <li key={line}>{line}</li>
                     ))}
                   </ul>
+                  <SpectrumChart bands={result.analysis.bands} />
                   {Math.abs(source.volumeDb) >= 0.5 && (
                     <p className="hint">{t("這個來源的音量推桿目前在 {db} dB。上面的音量是以推桿在 0 dB 計算的。", { db: source.volumeDb.toFixed(1) })}</p>
                   )}
@@ -304,16 +306,16 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
             {phase.kind === "applied" ? (
               <>
                 <div className="row-label">{t("比較")}</div>
-                <div className="seg seg-inline" role="group" aria-label={t("比較")}>
-                  <button type="button" aria-pressed={phase.tuned} disabled={busy} onClick={() => switchTo(phase, true)}>
-                    {t("調整後")}
-                  </button>
-                  <button type="button" aria-pressed={!phase.tuned} disabled={busy} onClick={() => switchTo(phase, false)}>
-                    {t("原本")}
-                  </button>
-                </div>
-                {onMonitorType && (
-                  <div className="row">
+                <div className="compare-row">
+                  <div className="seg seg-inline" role="group" aria-label={t("比較")}>
+                    <button type="button" aria-pressed={phase.tuned} disabled={busy} onClick={() => switchTo(phase, true)}>
+                      {t("調整後")}
+                    </button>
+                    <button type="button" aria-pressed={!phase.tuned} disabled={busy} onClick={() => switchTo(phase, false)}>
+                      {t("原本")}
+                    </button>
+                  </div>
+                  {onMonitorType && (
                     <button
                       type="button"
                       className="btn"
@@ -323,8 +325,8 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                       <Icon name="headphones" size={15} />
                       {listening ? t("停止監聽") : t("用耳機監聽")}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
                 <p className="hint">
                   {onMonitorType
                     ? t("切換會馬上生效。用耳機監聽就能聽出差別（請戴耳機，用喇叭會有回音），觀眾聽到的聲音不受影響。關閉這個視窗後，監聽會恢復成原本的設定。")

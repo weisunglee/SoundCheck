@@ -6,6 +6,8 @@
 //! fix (too quiet, clipping, too noisy, too little talking) gets no EQ, only the problem, so the
 //! UI can ask the user to fix it and record again.
 
+use std::f64::consts::PI;
+
 use serde::Serialize;
 
 use crate::i18n::tr;
@@ -120,6 +122,10 @@ pub struct BandLevel {
     pub freq: f64,
     /// How far the voice is above (+) or below (-) the average speech spectrum.
     pub deviation_db: f64,
+    /// The same after the plan's voice EQ (high-pass, mud, presence, air), as predicted from the
+    /// filters' response; None without a plan. The de-esser only acts on loud "s" sounds and the
+    /// dynamics change the level, not the shape, so neither is in it.
+    pub tuned_db: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -274,7 +280,7 @@ pub fn analyze(samples: &[f32], rate: u32) -> Analysis {
 
     let (compressor, gain_db) = plan_dynamics(samples, &k, fs, &voiced, frame);
 
-    analysis.plan = Some(Plan {
+    let plan = Plan {
         noise_suppression: analysis.issues.iter().any(|i| i.kind == IssueKind::SomeNoise),
         highpass_hz,
         mud,
@@ -284,8 +290,74 @@ pub fn analyze(samples: &[f32], rate: u32) -> Analysis {
         presence,
         air,
         limiter_db: -2.0,
-    });
+    };
+    for band in &mut analysis.bands {
+        band.tuned_db = Some(round_to(band.deviation_db + eq_response_db(&plan, band.freq), 0.1));
+    }
+    analysis.plan = Some(plan);
     analysis
+}
+
+/// The rate the EQ response is predicted at; the bands all sit well below its Nyquist frequency.
+const RESPONSE_RATE: f64 = 48_000.0;
+/// Q of the two sections of the voice EQ's 24 dB/octave Butterworth high-pass (voice-eq.cpp).
+const HIGHPASS_Q: [f64; 2] = [0.541_196_10, 1.306_562_96];
+
+/// Gain (dB) of the plan's voice EQ at `freq`: the same RBJ cookbook sections as the plugin's
+/// biquad.hpp, evaluated on the unit circle.
+fn eq_response_db(plan: &Plan, freq: f64) -> f64 {
+    let fs = RESPONSE_RATE;
+    let mut db: f64 = HIGHPASS_Q.iter().map(|&q| biquad_db(highpass(fs, plan.highpass_hz, q), freq, fs)).sum();
+    for band in [plan.mud, plan.presence].into_iter().flatten() {
+        db += biquad_db(peak(fs, band.freq, band.gain_db, band.q), freq, fs);
+    }
+    if let Some(air) = plan.air {
+        db += biquad_db(high_shelf(fs, air.freq, air.gain_db), freq, fs);
+    }
+    db
+}
+
+/// Normalized biquad coefficients [b0, b1, b2, a1, a2].
+type Coeffs = [f64; 5];
+
+fn normalize(b0: f64, b1: f64, b2: f64, a0: f64, a1: f64, a2: f64) -> Coeffs {
+    [b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0]
+}
+
+fn highpass(fs: f64, freq: f64, q: f64) -> Coeffs {
+    let w = 2.0 * PI * freq / fs;
+    let (c, alpha) = (w.cos(), w.sin() / (2.0 * q));
+    normalize((1.0 + c) / 2.0, -(1.0 + c), (1.0 + c) / 2.0, 1.0 + alpha, -2.0 * c, 1.0 - alpha)
+}
+
+fn peak(fs: f64, freq: f64, gain_db: f64, q: f64) -> Coeffs {
+    let (a, w) = (10f64.powf(gain_db / 40.0), 2.0 * PI * freq / fs);
+    let (c, alpha) = (w.cos(), w.sin() / (2.0 * q));
+    normalize(1.0 + alpha * a, -2.0 * c, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * c, 1.0 - alpha / a)
+}
+
+/// High shelf with slope 1.
+fn high_shelf(fs: f64, freq: f64, gain_db: f64) -> Coeffs {
+    let (a, w) = (10f64.powf(gain_db / 40.0), 2.0 * PI * freq / fs);
+    let c = w.cos();
+    let sa = 2.0 * a.sqrt() * (w.sin() / 2.0 * 2f64.sqrt());
+    normalize(
+        a * ((a + 1.0) + (a - 1.0) * c + sa),
+        -2.0 * a * ((a - 1.0) + (a + 1.0) * c),
+        a * ((a + 1.0) + (a - 1.0) * c - sa),
+        (a + 1.0) - (a - 1.0) * c + sa,
+        2.0 * ((a - 1.0) - (a + 1.0) * c),
+        (a + 1.0) - (a - 1.0) * c - sa,
+    )
+}
+
+/// |H(e^jw)| of a biquad at `freq`, dB.
+fn biquad_db([b0, b1, b2, a1, a2]: Coeffs, freq: f64, fs: f64) -> f64 {
+    let w = 2.0 * PI * freq / fs;
+    let (c1, s1, c2, s2) = (w.cos(), w.sin(), (2.0 * w).cos(), (2.0 * w).sin());
+    let num = (b0 + b1 * c1 + b2 * c2).powi(2) + (b1 * s1 + b2 * s2).powi(2);
+    let den = (1.0 + a1 * c1 + a2 * c2).powi(2) + (a1 * s1 + a2 * s2).powi(2);
+    10.0 * (num / den).log10()
 }
 
 fn rms_db(frame: &[f32]) -> f64 {
@@ -490,7 +562,7 @@ impl Spectrum {
         let offset = percentile(&core, 0.5);
         raw.iter()
             .zip(&LTASS)
-            .map(|(d, (freq, _))| BandLevel { freq: *freq, deviation_db: round_to(d - offset, 0.1) })
+            .map(|(d, (freq, _))| BandLevel { freq: *freq, deviation_db: round_to(d - offset, 0.1), tuned_db: None })
             .collect()
     }
 }
@@ -677,7 +749,6 @@ fn decode_base64(text: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::f64::consts::PI;
 
     const FS: u32 = 48_000;
 
@@ -973,6 +1044,42 @@ mod tests {
         let noise = a.noise_dbfs.unwrap();
         assert!(noise > -52.0, "noise {noise}");
         assert!(plan(&a).noise_suppression, "{:?}", a.issues);
+    }
+
+    #[test]
+    fn eq_response_matches_the_filter_designs() {
+        let plan = Plan {
+            noise_suppression: false,
+            highpass_hz: 80.0,
+            mud: Some(Band { freq: 315.0, gain_db: -6.0, q: 1.4 }),
+            de_esser: None,
+            compressor: Compressor { threshold_db: -20.0, ratio: 3.0, attack_ms: 10.0, release_ms: 100.0, output_gain_db: 0.0 },
+            gain_db: 0.0,
+            presence: Some(Band { freq: 3150.0, gain_db: 4.0, q: 1.0 }),
+            air: None,
+            limiter_db: -2.0,
+        };
+        let hp = |f: f64| HIGHPASS_Q.iter().map(|&q| biquad_db(highpass(RESPONSE_RATE, 80.0, q), f, RESPONSE_RATE)).sum::<f64>();
+        assert!((hp(80.0) + 3.01).abs() < 0.05, "{}", hp(80.0));
+        assert!((hp(40.0) - hp(80.0) + 21.0).abs() < 4.0, "24 dB/octave below the cutoff: {} {}", hp(40.0), hp(80.0));
+        // At the centers the peaks give their gain; the high-pass is far enough below by then.
+        assert!((eq_response_db(&plan, 315.0) + 6.0).abs() < 0.1, "{}", eq_response_db(&plan, 315.0));
+        assert!((eq_response_db(&plan, 3150.0) - 4.0).abs() < 0.1, "{}", eq_response_db(&plan, 3150.0));
+        let shelf = biquad_db(high_shelf(RESPONSE_RATE, 10000.0, 3.0), 18000.0, RESPONSE_RATE);
+        assert!((shelf - 3.0).abs() < 0.2, "{shelf}");
+        assert!(biquad_db(high_shelf(RESPONSE_RATE, 10000.0, 3.0), 1000.0, RESPONSE_RATE).abs() < 0.2);
+    }
+
+    #[test]
+    fn tuned_bands_follow_the_plan() {
+        let a = analyze(&voice(&Voice { tilt: vec![(220.0, 450.0, 9.0)], ..Voice::default() }), FS);
+        let mud = plan(&a).mud.expect("a muddy voice gets a mud cut");
+        assert!(a.bands.iter().all(|b| b.tuned_db.is_some()));
+        let band = a.bands.iter().find(|b| b.freq == mud.freq).unwrap();
+        assert!((band.tuned_db.unwrap() - (band.deviation_db + mud.gain_db)).abs() < 0.5, "{band:?} {mud:?}");
+        // Without a plan there is nothing to predict.
+        let silent = analyze(&vec![0.0; FS as usize * 5], FS);
+        assert!(silent.bands.iter().all(|b| b.tuned_db.is_none()));
     }
 
     #[test]
