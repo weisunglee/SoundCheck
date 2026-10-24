@@ -24,6 +24,7 @@ An audio tool for streamers. Test your sound before you go live, see what your v
 | **Sounds on this computer** | Apps and devices playing sound right now, which of them the stream doesn't capture yet, and a one-click way to add them (Windows). |
 | **Add-sound wizard** | Asks "what do you want to add?" (a mic, everything the computer plays, one app) instead of listing source types. |
 | **Filter wizard** | Starts from the problem ("background noise", "volume jumps around", "shouting clips") and adds the right filters in the right order, explains each one, and draws thresholds on a live level bar. |
+| **Voice tuning** (OBS) | Records 15–20 seconds of you talking, straight from the mic before its filters, analyzes the voice (pitch, spectrum against the average speech spectrum, loudness, background noise) and sets up the chain: high-pass, mud cut, de-esser, compressor, presence and air, limiter. Says what it changed in plain words, lets you switch between before and after, and backs up the old filters so one click undoes it. Needs plugin 0.5.0. |
 | **Quick settings** | Volume, mute, show or hide in the scene, balance, sync offset, tracks. |
 | **Profiles** | Save every source's audio settings and filters, and apply them again in one go. A backup is saved before each apply. |
 
@@ -76,6 +77,7 @@ mixer ──(stream track)──▶ plugin ──local socket──▶ SoundChec
                                                        └─▶ stream meter, loudness
 ```
 
+- **Voice filters** (plugin 0.5.0): *SoundCheck Voice EQ* (`soundcheck_voice_eq`: 24 dB/octave high-pass, two peaking bands, high shelf and a de-esser, per channel) and *SoundCheck Voice Analyzer* (`soundcheck_voice_analyzer`: passes audio through and, on request, records it as mono float PCM that the app reads in chunks). libobs runs a source's filters before any audio callback sees it, so the analyzer has to be first in the chain to hear the mic as it is; the app adds it for the recording and removes it after. The analysis is in Rust (`src-tauri/src/voice_analysis.rs`), and the chain is built through the adapter's filter operations (`src/voiceTuning.ts`).
 - **Tap**: `obs_add_raw_audio_callback` on the stream's track, sent as 48 kHz stereo float PCM over a local socket (not WebSocket; JSON would be too heavy).
 - **Which track the stream uses**: asked from the live streaming output's mixers.
 - **Pausing the stream during playback**: the plugin takes every source off the stream track and restores it afterwards. The app sends a heartbeat during playback; if it stops (a crash or disconnect), the plugin restores the tracks by itself within seconds.

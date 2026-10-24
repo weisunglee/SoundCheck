@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import type { SoftwareAdapter } from "../adapter";
-import { type ApplyResult, BACKUPS_KEPT, type Profile, applyProfile, backupName, captureProfile } from "../profiles";
+import { type ApplyResult, BACKUPS_KEPT, type Profile, applyProfile, captureProfile, saveBackup } from "../profiles";
 import type { AudioSource } from "../types";
 import { locale, t } from "../i18n";
 import { IconButton } from "./Icon";
@@ -66,10 +66,7 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
     run(t("套用中…"), async () => {
       const profile = await invoke<Profile>("profile_load", { name: profileName });
       // Keep the current settings first, so a wrong profile can be undone; keep only the newest few.
-      const backup = backupName();
-      await invoke("profile_save", { name: backup, data: await captureProfile(adapter, backup, sources, true) });
-      const backups = (await invoke<Summary[]>("profiles_list")).filter((p) => p.backup);
-      for (const old of backups.slice(BACKUPS_KEPT)) await invoke("profile_delete", { name: old.name });
+      await saveBackup(adapter, sources);
       setResult({ name: profileName, result: await applyProfile(adapter, profile, sources) });
     });
 

@@ -10,6 +10,8 @@ type Settings = Record<string, string | number | boolean>;
 interface Props {
   ops: FilterOps;
   sourceName: string;
+  /** Opens the voice tuning for this source; left out when the software can't do it. */
+  onVoiceTuning?: () => void;
   /** Live input peak of the source in dBFS, or null when silent or unknown. */
   inputDb: number | null;
   onClose: () => void;
@@ -17,7 +19,7 @@ interface Props {
 
 const SETTINGS_DEBOUNCE_MS = 150;
 
-export function FilterWizard({ ops, sourceName, inputDb, onClose }: Props) {
+export function FilterWizard({ ops, sourceName, onVoiceTuning, inputDb, onClose }: Props) {
   const [filters, setFilters] = useState<SourceFilter[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -72,6 +74,13 @@ export function FilterWizard({ ops, sourceName, inputDb, onClose }: Props) {
         <section className="wizard-section">
           <h4 className="section-title">{t("你遇到什麼問題？")}</h4>
           <div className="problems">
+            {onVoiceTuning && (
+              <button type="button" className="problem voice-entry" disabled={busy} onClick={onVoiceTuning}>
+                <Icon name="wand-sparkles" />
+                <span className="problem-title">{t("自動調整人聲")}</span>
+                <span className="problem-detail">{t("錄一段說話，分析你的聲線，自動設定等化、壓縮和音量")}</span>
+              </button>
+            )}
             {PROBLEMS.map((p) => {
               const solved = p.kinds.every(has);
               return (
@@ -332,6 +341,28 @@ const EDITORS: Record<string, (p: EditorProps) => React.ReactNode> = {
       <div className="editor">
         <LevelBar inputDb={inputDb} markers={[{ db: threshold, label: t("上限"), tone: "hot" }]} />
         <Slider label={t("音量上限")} value={threshold} min={-20} max={0} step={0.5} unit="dB" hint={t("-1 到 -3 dB 最常見。設太低會讓大聲的地方聽起來被悶住。")} onChange={(v) => change({ threshold: v })} />
+      </div>
+    );
+  },
+
+  soundcheck_voice_eq: ({ settings, change }) => {
+    const hpf = num(settings.hpf_freq, 0);
+    const deess = Boolean(settings.deess_enabled);
+    return (
+      <div className="editor">
+        <Slider label={t("切掉低頻")} value={hpf} min={0} max={150} step={5} unit="Hz" hint={t("這個頻率以下的轟轟聲會被切掉；0 是不切。")} onChange={(v) => change({ hpf_freq: v })} />
+        <Slider label={t("減少悶的聲音")} value={num(settings.mud_gain, 0)} min={-12} max={0} step={0.5} unit="dB" onChange={(v) => change({ mud_gain: v })} />
+        <Slider label={t("悶的頻率")} value={num(settings.mud_freq, 300)} min={150} max={800} step={5} unit="Hz" onChange={(v) => change({ mud_freq: v })} />
+        <Slider label={t("讓字更清楚")} value={num(settings.presence_gain, 0)} min={0} max={8} step={0.5} unit="dB" onChange={(v) => change({ presence_gain: v })} />
+        <Slider label={t("清楚度的頻率")} value={num(settings.presence_freq, 3000)} min={1500} max={6000} step={50} unit="Hz" onChange={(v) => change({ presence_freq: v })} />
+        <Slider label={t("空氣感")} value={num(settings.air_gain, 0)} min={0} max={6} step={0.5} unit="dB" hint={t("加亮最高的頻率，太多會讓雜音和齒音變明顯。")} onChange={(v) => change({ air_gain: v })} />
+        <label className="switch">
+          <input type="checkbox" checked={deess} onChange={(e) => change({ deess_enabled: e.target.checked })} />
+          <span>{t("齒音消除")}</span>
+        </label>
+        {deess && (
+          <Slider label={t("齒音消除的門檻")} value={num(settings.deess_threshold, -30)} min={-60} max={0} step={0.5} unit="dB" hint={t("數字越小，越多齒音會被壓低。")} onChange={(v) => change({ deess_threshold: v })} />
+        )}
       </div>
     );
   },
