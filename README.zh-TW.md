@@ -22,6 +22,8 @@
 2. 開啟 SoundCheck。連不上時畫面會依原因一步一步說明。
 3. 想用試音和「觀眾聽到的」音量表，按右上角的「安裝外掛」。OBS 安裝時需要你自己關閉 OBS，裝好後 SoundCheck 會幫你重新開啟並確認外掛已載入；Streamlabs 第一次安裝不用重開，更新時才需要先關閉它。
 
+**更新**：SoundCheck 啟動時會到 GitHub 檢查有沒有新版本，也可以按右上角的箭頭按鈕「檢查更新」。有新版本時會先顯示版本號和更新說明，問你要不要更新，按「更新」就會下載、安裝並重新開啟。按「以後再說」到下次啟動才會再問；按「略過這個版本」要等更新的版本出來才會再問。免安裝版沒辦法自己換掉，會改成開啟下載頁。**0.3.0 還沒有自動更新：下一版要手動安裝一次**，之後就會自動更新。新版附的外掛比較新的話，更新後會照常出現「更新外掛」按鈕。
+
 ## 設計說明
 
 以下是開發時的設計和驗證紀錄。
@@ -229,7 +231,9 @@ npm run bump -- 0.3.0     # 或 patch／minor／major，會一起改所有存版
 git commit -am "Release 0.3.0" && git push
 ```
 
-push 讓 `src-tauri/tauri.conf.json` 的版號變成一個還沒有 tag 的版號時，兩個平台會打包進草稿 Release `v0.3.0`，檢查都通過、兩個安裝檔都上傳後才正式發布。外掛有自己的版號，在 `obs-plugin/buildspec.json`。安裝檔目前都沒有程式碼簽章：Windows 的 SmartScreen 會警告「不明發行者」，macOS 第一次開啟要按右鍵 →「打開」。
+push 讓 `src-tauri/tauri.conf.json` 的版號變成一個還沒有 tag 的版號時，兩個平台會打包進草稿 Release `v0.3.0`，檢查都通過、兩個安裝檔都上傳後才正式發布。
+
+已安裝的 App 透過 Release 裡的 `latest.json` 找新版本，而且只安裝用更新金鑰簽過的檔案。私鑰和密碼放在 repo secrets `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，公鑰在 `tauri.conf.json` 的 `plugins.updater.pubkey`；發布時缺少它們會失敗，其他沒有 secret 的建置（例如 fork 來的 PR）則不產生更新檔。私鑰遺失的話，已安裝的 App 就再也無法自動更新，請在 GitHub 以外另外備份。不發布也能測試更新的方法見英文 README 的 “Continuous integration and releases”。外掛有自己的版號，在 `obs-plugin/buildspec.json`。安裝檔目前都沒有程式碼簽章：Windows 的 SmartScreen 會警告「不明發行者」，macOS 第一次開啟要按右鍵 →「打開」。
 
 ### 語言
 

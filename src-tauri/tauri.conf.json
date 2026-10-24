@@ -38,5 +38,14 @@
       "icons/icon.ico"
     ]
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY",
+      "endpoints": ["https://github.com/weisunglee/SoundCheck/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "mainBinaryName": "SoundCheck"
 }

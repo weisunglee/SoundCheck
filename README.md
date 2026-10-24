@@ -65,6 +65,8 @@ Download SoundCheck from the [latest release](https://github.com/weisunglee/Soun
    - OBS: you close OBS yourself (so you can end a stream and save first), SoundCheck installs the plugin, and a button opens OBS again and checks that the plugin loaded.
    - Streamlabs: a first install loads right away, no restart. Updating needs Streamlabs closed, because it keeps a loaded plugin file locked.
 
+**Updates**: SoundCheck checks GitHub for a new version when it starts, and on request with the arrow-up button in the top right. It shows the version and its notes and asks first; it then downloads, installs and reopens itself. *Later* doesn't ask again until the next start, *Skip this version* not until a newer one comes out. The portable version can't replace itself, so it opens the download page instead. **SoundCheck 0.3.0 has no updater: install the next version by hand once**, and it updates itself from then on. If the new version bundles a newer plugin, the usual **Update plugin** button appears after the update.
+
 ## How it works
 
 ### The plugin
@@ -143,7 +145,19 @@ npm run bump -- 0.3.0     # or patch / minor / major; updates every file that ho
 git commit -am "Release 0.3.0" && git push
 ```
 
-A push that changes the version in `src-tauri/tauri.conf.json` to one without a tag builds both platforms into a draft release `v0.3.0` and publishes it once the checks pass and both installers are in it. The plugin has its own version, in `obs-plugin/buildspec.json`. Neither installer is code-signed yet: Windows SmartScreen warns about an unknown publisher, and macOS asks to open the app with right-click → Open the first time.
+A push that changes the version in `src-tauri/tauri.conf.json` to one without a tag builds both platforms into a draft release `v0.3.0` and publishes it once the checks pass and both installers are in it.
+
+Installed copies find new versions through the release's `latest.json`, which the builds write, and install only files signed with the updater key. The repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` hold the private key and its password, and `plugins.updater.pubkey` in `tauri.conf.json` its public half; a release fails without them, while other builds without the secret (pull requests from forks) skip the update files. Losing the private key means installed copies can't update anymore: keep a backup outside GitHub. To try an update without releasing, build with a test key and a local `latest.json` through `--config` (the endpoint is fixed at build time, so a released app can't be pointed elsewhere):
+
+```sh
+npx tauri signer generate --ci -p pass -w /tmp/test.key
+# test.conf.json: {"version": "0.3.1", "bundle": {"createUpdaterArtifacts": true},
+#   "plugins": {"updater": {"pubkey": "<test.key.pub>", "endpoints": ["http://127.0.0.1:8765/latest.json"],
+#   "dangerousInsecureTransportProtocol": true}}}
+TAURI_SIGNING_PRIVATE_KEY="$(cat /tmp/test.key)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=pass npx tauri build --config test.conf.json
+```
+
+Build an older version the same way to install first, serve a `latest.json` that points at the newer build's update file and `.sig`, and check for updates in the older one. The plugin has its own version, in `obs-plugin/buildspec.json`. Neither installer is code-signed yet: Windows SmartScreen warns about an unknown publisher, and macOS asks to open the app with right-click → Open the first time.
 
 ### Translations
 

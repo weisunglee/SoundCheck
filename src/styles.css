@@ -1220,6 +1220,25 @@ body,
   font-weight: 600;
 }
 
+/* ---------- app update ---------- */
+
+.update-notes {
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--raised);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.link.update-page {
+  justify-self: start;
+  padding: 0;
+}
+
 .steps {
   list-style: none;
   margin: 0;
