@@ -160,9 +160,8 @@ jobs:
           KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           RELEASE: ${{ needs.version.outputs.release }}
         run: |
-          pubkey=$(jq -r .plugins.updater.pubkey src-tauri/tauri.conf.json)
-          if [ "$RELEASE" = "true" ] && { [ -z "$KEY" ] || [ "$pubkey" = "REPLACE_WITH_UPDATER_PUBLIC_KEY" ]; }; then
-            echo "::error::A release needs the TAURI_SIGNING_PRIVATE_KEY secret and its public key in tauri.conf.json, so installed copies can update to it."
+          if [ "$RELEASE" = "true" ] && [ -z "$KEY" ]; then
+            echo "::error::A release needs the TAURI_SIGNING_PRIVATE_KEY secret, so installed copies can update to it."
             exit 1
           elif [ -n "$KEY" ]; then
             echo "args=--config src-tauri/tauri.updater.conf.json" >> "$GITHUB_OUTPUT"
