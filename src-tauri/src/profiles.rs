@@ -15,6 +15,8 @@ pub struct ProfileSummary {
     name: String,
     saved_at: Option<String>,
     source_count: usize,
+    /// The streaming software it was saved in ("obs", "streamlabs"); None for older profiles.
+    software: Option<String>,
 }
 
 fn dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -69,6 +71,7 @@ pub fn profiles_list(app: AppHandle) -> Result<Vec<ProfileSummary>, String> {
             name: value["name"].as_str().unwrap_or_default().to_string(),
             saved_at: value["savedAt"].as_str().map(str::to_string),
             source_count: value["sources"].as_array().map_or(0, Vec::len),
+            software: value["software"].as_str().map(str::to_string),
         });
     }
     list.sort_by(|a, b| b.saved_at.cmp(&a.saved_at));

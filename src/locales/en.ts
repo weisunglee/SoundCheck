@@ -251,6 +251,8 @@ const table: Record<string, string> = {
   "設定一個音量上限，再大聲也不會超過，避免大叫或尖叫時爆音。應該放在最後。": "Sets a ceiling that sound never goes over, preventing clipping when you shout. It should come last.",
   "設定檔": "Profiles",
   "已移除設定檔裡沒有的濾鏡：{list}": "Removed filters not in the profile: {list}",
+  "注意：這個設定檔是在 {saved} 存的，現在連線的是 {current}。兩邊的來源和濾鏡不一定一樣，套用可能會改到同名但不同的來源，或移除你在 {current} 裡的濾鏡。": "Note: this profile was saved in {saved}, and you're connected to {current}. Their sources and filters may differ: applying it may change a different source that has the same name, or remove filters you have in {current}.",
+  "這是在其他直播軟體存的設定檔": "Saved in another streaming app",
   "試聽": "Preview",
   "試聽中": "Previewing",
   "試音": "Sound check",
