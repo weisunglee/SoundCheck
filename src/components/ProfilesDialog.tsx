@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import type { SoftwareAdapter } from "../adapter";
-import { type ApplyResult, BACKUPS_KEPT, type Profile, applyProfile, backupName, captureProfile } from "../profiles";
+import { type ApplyResult, type Profile, applyProfile, captureProfile } from "../profiles";
 import type { AudioSource } from "../types";
 import { locale, t } from "../i18n";
 import { IconButton } from "./Icon";
@@ -65,11 +65,7 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
   const apply = (profileName: string) =>
     run(t("套用中…"), async () => {
       const profile = await invoke<Profile>("profile_load", { name: profileName });
-      // Keep the current settings first, so a wrong profile can be undone; keep only the newest few.
-      const backup = backupName();
-      await invoke("profile_save", { name: backup, data: await captureProfile(adapter, backup, sources, true) });
-      const backups = (await invoke<Summary[]>("profiles_list")).filter((p) => p.backup);
-      for (const old of backups.slice(BACKUPS_KEPT)) await invoke("profile_delete", { name: old.name });
+      // Applying replaces the current settings; the user saves them first if they want to keep them.
       setResult({ name: profileName, result: await applyProfile(adapter, profile, sources) });
     });
 
@@ -97,7 +93,7 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
           <IconButton icon="x" label={t("關閉")} className="close" onClick={onClose} />
         </div>
         <p className="dialog-lead">
-          {t("把所有聲音來源的音量、靜音、監聽、左右平衡、提早延後、音軌和聲音濾鏡存成一組，之後一鍵套用。套用前會自動備份目前的設定（保留最近 {n} 份），套錯可以還原。", { n: BACKUPS_KEPT })}
+          {t("把所有聲音來源的音量、靜音、監聽、左右平衡、提早延後、音軌和聲音濾鏡存成一組，之後一鍵套用。套用會取代目前的設定；想保留目前的設定，請先儲存成一個設定檔。")}
         </p>
 
         <form
@@ -123,7 +119,7 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
 
         {confirm && (
           <div className="verdict verdict-warn confirm">
-            {confirm.kind === "apply" && t("套用「{name}」會改變直播軟體裡的聲音設定（會先自動備份）。確定嗎？", { name: confirm.name })}
+            {confirm.kind === "apply" && t("套用「{name}」會取代直播軟體裡目前的聲音設定，設定檔裡沒有的聲音濾鏡會被移除。目前的設定不會自動備份，想保留請先在上面儲存。確定嗎？", { name: confirm.name })}
             {confirm.kind === "apply" && confirm.otherCollection && (
               <div>{t("注意：這個設定檔是在場景集合「{collection}」存的，同名的來源在這裡可能是不同的東西。", { collection: confirm.otherCollection })}</div>
             )}
@@ -188,7 +184,7 @@ function ApplySummary({ name, result }: { name: string; result: ApplyResult }) {
         {t("已套用「{name}」到 {n} 個來源。", { name, n: result.applied.length })}
       </div>
       {result.missing.length > 0 && <div>{t("直播軟體裡找不到、已略過：{list}", { list: result.missing.join(t("、")) })}</div>}
-      {result.extraFilters.length > 0 && <div>{t("設定檔裡沒有、保留不動的濾鏡：{list}", { list: result.extraFilters.join(t("、")) })}</div>}
+      {result.removedFilters.length > 0 && <div>{t("已移除設定檔裡沒有的濾鏡：{list}", { list: result.removedFilters.join(t("、")) })}</div>}
       {result.errors.map((e) => (
         <div key={e}>{e}</div>
       ))}
