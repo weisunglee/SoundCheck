@@ -1358,6 +1358,27 @@ body,
   color: var(--muted);
 }
 
+.change-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.6;
+}
+
+.problem.voice-entry {
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 10px;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.problem.voice-entry .icon {
+  grid-row: span 2;
+  color: var(--accent);
+}
+
 .filter-list {
   list-style: none;
   margin: 0;

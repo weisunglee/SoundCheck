@@ -111,7 +111,7 @@ try {
   const after = (await obsAdapter.load()).sources.filter((s) => s.name === INPUT);
   const result = await applyProfile(obsAdapter, { ...profile, sources: [...profile.sources, { ...profile.sources[0], name: "不存在的來源" }] }, after);
   check(result.applied.join() === INPUT && result.missing.join() === "不存在的來源", "apply reports applied and missing sources", JSON.stringify(result));
-  check(result.extraFilters.some((f) => f.includes(t("擴展器"))), "filter not in the profile is reported, not removed");
+  check(result.removedFilters.some((f) => f.includes(t("擴展器"))), "filter not in the profile is removed and reported");
 
   const restored = (await obsAdapter.load()).sources.find((s) => s.name === INPUT)!;
   // OBS keeps balance as a float, so 0.3 comes back as 0.30000001.
@@ -124,8 +124,8 @@ try {
   check(restored.tracks.join() === "1,2", "tracks restored", restored.tracks.join());
   const restoredChain = await filters.list(INPUT);
   check(
-    savedChain.every((n, i) => restoredChain[i]?.name === n),
-    "filter chain restored in saved order (deleted one recreated)",
+    restoredChain.map((f) => f.name).join() === savedChain.join(),
+    "filter chain restored exactly: saved order, deleted one recreated, extra one removed",
     restoredChain.map((f) => f.name).join(" → "),
   );
   check(restoredChain.find((f) => f.name === gate.name)?.settings.open_threshold === -30, "filter settings restored");

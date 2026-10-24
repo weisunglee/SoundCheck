@@ -154,13 +154,13 @@ try {
   await wait(300);
   const result = await applyProfile(sl, profile, (await sl.load()).sources.filter((x) => x.name === INPUT));
   check(result.applied.join() === INPUT && result.errors.length === 0, "profile applied", JSON.stringify(result));
-  check(result.extraFilters.some((f) => f.includes(t("擴展器"))), "filter not in the profile is reported, not removed");
+  check(result.removedFilters.some((f) => f.includes(t("擴展器"))), "filter not in the profile is removed and reported");
   await wait(300);
   s = await source();
   check(s?.monitorType === "monitorOnly" && s?.tracks.join() === "1,3" && s?.syncOffsetMs === 120, "monitoring, tracks, sync restored", JSON.stringify(s));
   check(s?.muted === true && Math.abs((s?.volumeDb ?? 0) + 12) < 0.5, "volume and mute restored", `${s?.volumeDb} dB`);
   const restored = await filters.list(INPUT);
-  check(savedChain.every((n, i) => restored[i]?.name === n), "filter chain restored in saved order", restored.map((f) => f.name).join(" → "));
+  check(restored.map((f) => f.name).join() === savedChain.join(), "filter chain restored exactly (extra one removed)", restored.map((f) => f.name).join(" → "));
   check(restored.find((f) => f.name === gate.name)?.settings.open_threshold === -30, "filter settings restored");
 } finally {
   stopWatching();

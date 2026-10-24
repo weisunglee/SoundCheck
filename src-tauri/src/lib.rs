@@ -10,6 +10,7 @@ mod streamlabs_plugin;
 mod stream_tap;
 mod system_audio;
 mod updates;
+mod voice_analysis;
 
 use tauri::Manager;
 
@@ -68,6 +69,7 @@ pub fn run() {
             system_audio::device_listen_start,
             system_audio::device_listen_stop,
             updates::can_install_updates,
+            voice_analysis::voice_analyze,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
