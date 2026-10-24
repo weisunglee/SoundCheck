@@ -81,6 +81,9 @@ describe("captureProfile", () => {
     const profile = await captureProfile(fakeAdapter(savedChain()), "p", sources);
     expect(profile.sources[0].filters).toEqual(audioOnly(savedChain()));
   });
+  it("records which streaming software it was saved in", async () => {
+    expect((await captureProfile(fakeAdapter(savedChain()), "p", sources)).software).toBe("obs");
+  });
 });
 
 describe.each([

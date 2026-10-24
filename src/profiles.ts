@@ -2,6 +2,7 @@
 // streaming software. Works with any adapter that has everything profiles save (capabilities.profiles).
 import type { FilterOps, SoftwareAdapter } from "./adapter";
 import { AUDIO_FILTER_KINDS } from "./adapter";
+import type { SoftwareId } from "./software";
 import type { AudioSource, MonitorType } from "./types";
 import { t } from "./i18n";
 
@@ -32,6 +33,8 @@ export interface Profile {
   savedAt: string;
   /** Scene collection the profile was saved in; source names only mean the same thing there. */
   sceneCollection?: string;
+  /** The streaming software it was saved in; missing in profiles saved before this was recorded. */
+  software?: SoftwareId;
   sources: ProfileSource[];
 }
 
@@ -88,6 +91,7 @@ export async function captureProfile(adapter: SoftwareAdapter, name: string, sou
     name,
     savedAt: new Date().toISOString(),
     sceneCollection: await sw.sceneCollection?.(),
+    software: adapter.id,
     sources: captured,
   };
 }

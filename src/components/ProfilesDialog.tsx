@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import type { SoftwareAdapter } from "../adapter";
 import { type ApplyResult, type Profile, applyProfile, captureProfile } from "../profiles";
+import { SOFTWARE_NAMES, type SoftwareId } from "../software";
 import type { AudioSource } from "../types";
 import { locale, t } from "../i18n";
 import { IconButton } from "./Icon";
@@ -10,6 +11,7 @@ interface Summary {
   name: string;
   savedAt: string | null;
   sourceCount: number;
+  software: SoftwareId | null;
 }
 
 interface Props {
@@ -26,7 +28,12 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
   const [list, setList] = useState<Summary[] | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<Busy>({ kind: "idle" });
-  const [confirm, setConfirm] = useState<{ kind: "apply" | "delete" | "overwrite"; name: string; otherCollection?: string | null } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    kind: "apply" | "delete" | "overwrite";
+    name: string;
+    otherCollection?: string | null;
+    otherSoftware?: SoftwareId | null;
+  } | null>(null);
   const [result, setResult] = useState<{ name: string; result: ApplyResult } | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
@@ -74,8 +81,11 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
       adapter.sceneCollection?.().catch(() => null) ?? null,
     ]);
     const current = collection;
-    const otherCollection = profile?.sceneCollection && current && profile.sceneCollection !== current ? profile.sceneCollection : null;
-    setConfirm({ kind: "apply", name: profileName, otherCollection });
+    // Scene collections are per program, so another program's collection says nothing.
+    const otherSoftware = profile?.software && profile.software !== adapter.id ? profile.software : null;
+    const otherCollection =
+      !otherSoftware && profile?.sceneCollection && current && profile.sceneCollection !== current ? profile.sceneCollection : null;
+    setConfirm({ kind: "apply", name: profileName, otherCollection, otherSoftware });
   };
 
   const remove = (profileName: string) => run(t("刪除中…"), () => invoke("profile_delete", { name: profileName }));
@@ -119,6 +129,16 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
         {confirm && (
           <div className="verdict verdict-warn confirm">
             {confirm.kind === "apply" && t("套用「{name}」會取代直播軟體裡目前的聲音設定，設定檔裡沒有的聲音濾鏡會被移除。目前的設定不會自動備份，想保留請先在上面儲存。確定嗎？", { name: confirm.name })}
+            {confirm.kind === "apply" && confirm.otherSoftware && (
+              <div>
+                <b>
+                  {t("注意：這個設定檔是在 {saved} 存的，現在連線的是 {current}。兩邊的來源和濾鏡不一定一樣，套用可能會改到同名但不同的來源，或移除你在 {current} 裡的濾鏡。", {
+                    saved: SOFTWARE_NAMES[confirm.otherSoftware],
+                    current: SOFTWARE_NAMES[adapter.id],
+                  })}
+                </b>
+              </div>
+            )}
             {confirm.kind === "apply" && confirm.otherCollection && (
               <div>{t("注意：這個設定檔是在場景集合「{collection}」存的，同名的來源在這裡可能是不同的東西。", { collection: confirm.otherCollection })}</div>
             )}
@@ -155,7 +175,17 @@ export function ProfilesDialog({ adapter, sources, onClose }: Props) {
               {list.map((p) => (
                 <li key={p.name}>
                   <div>
-                    <div className="src-name">{p.name}</div>
+                    <div className="src-name">
+                      {p.name}
+                      {p.software && (
+                        <span
+                          className={`badge ${p.software === adapter.id ? "badge-hidden" : "badge-silent"}`}
+                          title={p.software === adapter.id ? undefined : t("這是在其他直播軟體存的設定檔")}
+                        >
+                          {SOFTWARE_NAMES[p.software]}
+                        </span>
+                      )}
+                    </div>
                     <div className="dev">
                       {t("{time}・{n} 個來源", { time: fmtTime(p.savedAt), n: p.sourceCount })}
                     </div>
