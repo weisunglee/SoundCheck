@@ -24,9 +24,9 @@ An audio tool for streamers. Test your sound before you go live, see what your v
 | **Sounds on this computer** | Apps and devices playing sound right now, which of them the stream doesn't capture yet, and a one-click way to add them (Windows). |
 | **Add-sound wizard** | Asks "what do you want to add?" (a mic, everything the computer plays, one app) instead of listing source types. |
 | **Filter wizard** | Starts from the problem ("background noise", "volume jumps around", "shouting clips") and adds the right filters in the right order, explains each one, and draws thresholds on a live level bar. |
-| **Voice tuning** (OBS) | Records 15–20 seconds of you talking, straight from the mic before its filters, analyzes the voice (pitch, spectrum against the average speech spectrum, loudness, background noise) and sets up the chain: high-pass, mud cut, de-esser, compressor, presence and air, limiter. Says what it changed in plain words, lets you switch between before and after, and backs up the old filters so one click undoes it. Needs plugin 0.5.0. |
+| **Voice tuning** (OBS) | Records 15–20 seconds of you talking, straight from the mic before its filters, analyzes the voice (pitch, spectrum against the average speech spectrum, loudness, background noise) and sets up the chain: high-pass, mud cut, de-esser, compressor, presence and air, limiter. Says what it changed in plain words, lets you listen to it against the original before applying; closing without applying puts the old filters back. Needs plugin 0.5.0. |
 | **Quick settings** | Volume, mute, show or hide in the scene, balance, sync offset, tracks. |
-| **Profiles** | Save every source's audio settings and filters, and apply them again in one go. A backup is saved before each apply. |
+| **Profiles** | Save every source's audio settings and filters, and apply them again in one go. Applying replaces the current settings; save them as a profile first to keep them. |
 
 ### What viewers can hear
 

@@ -361,7 +361,6 @@ export default function App() {
       )}
       {voiceFor && adapter?.filters && sources.some((s) => s.name === voiceFor) && (
         <VoiceTuning
-          adapter={adapter}
           ops={adapter.filters}
           source={sources.find((s) => s.name === voiceFor)!}
           plugin={plugin}
