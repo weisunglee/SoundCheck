@@ -10,7 +10,7 @@ describe("capabilitiesOf", () => {
   it("gives OBS everything", () => {
     expect(Object.values(capabilitiesOf(obsAdapter)).every(Boolean)).toBe(true);
   });
-  it("gives Streamlabs everything but balance and voice tuning, and meters only with the plugin", () => {
+  it("gives Streamlabs everything but balance, and meters only with the plugin", () => {
     expect(capabilitiesOf(streamlabsAdapter, true).meters).toBe(true);
     expect(capabilitiesOf(streamlabsAdapter)).toEqual({
       meters: false,
@@ -21,7 +21,7 @@ describe("capabilitiesOf", () => {
       filters: true,
       plugin: true,
       profiles: true,
-      voiceTuning: false,
+      voiceTuning: true,
     });
   });
   it("offers profiles without balance, but not without filters", () => {

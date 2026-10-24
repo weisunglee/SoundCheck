@@ -21,6 +21,7 @@
 
 #include "requests.hpp"
 #include "tap.hpp"
+#include "voice-filters.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -208,6 +209,8 @@ bool obs_module_load(void)
         g_listener = kNoSocket;
         return false;
     }
+    register_voice_eq();
+    register_voice_analyzer();
     g_stopping = false;
     g_server = std::thread(serve);
     blog(LOG_INFO, "[soundcheck] module loaded for Streamlabs (version %s), control port %u, %s", PLUGIN_VERSION, port,

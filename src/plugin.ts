@@ -71,9 +71,6 @@ export interface VoiceCaptureChunk {
   data: string;
 }
 
-/** The first plugin version with the voice EQ and analyzer filters. */
-export const VOICE_PLUGIN_VERSION = "0.5.0";
-
 /** Filter kinds the plugin adds (obs-plugin/src/voice-filters.hpp). */
 export const VOICE_EQ_KIND = "soundcheck_voice_eq";
 export const VOICE_ANALYZER_KIND = "soundcheck_voice_analyzer";

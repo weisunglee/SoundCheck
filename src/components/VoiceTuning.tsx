@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FilterOps } from "../adapter";
 import { t } from "../i18n";
 import { meterPosition } from "../levels";
-import { type Plugin, VOICE_PLUGIN_VERSION, compareVersions } from "../plugin";
+import { type Plugin, compareVersions } from "../plugin";
 import type { AudioSource, MonitorType } from "../types";
 import {
   type Applied,
@@ -43,6 +43,8 @@ interface Props {
   ops: FilterOps;
   source: AudioSource;
   plugin: Plugin | null;
+  /** The first plugin version with the voice filters in this program's build. */
+  needVersion: string;
   /** What the plugin reports: undefined while asking, null when it isn't loaded. */
   pluginVersion: string | null | undefined;
   /** The plugin can be installed from here (the software runs on this computer). */
@@ -58,7 +60,7 @@ type Result = Extract<Phase, { kind: "result" }>;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const message = (e: unknown) => String((e as Error)?.message ?? e);
 
-export function VoiceTuning({ ops, source, plugin, pluginVersion, canInstall, onInstallPlugin, onMonitorType, onClose }: Props) {
+export function VoiceTuning({ ops, source, plugin, needVersion, pluginVersion, canInstall, onInstallPlugin, onMonitorType, onClose }: Props) {
   const name = source.name;
   const [seconds, setSeconds] = useState(15);
   const [phase, setPhase] = useState<Phase>({ kind: "intro" });
@@ -98,7 +100,7 @@ export function VoiceTuning({ ops, source, plugin, pluginVersion, canInstall, on
     [ops, plugin, name],
   );
 
-  const ready = plugin && pluginVersion && compareVersions(pluginVersion, VOICE_PLUGIN_VERSION) >= 0;
+  const ready = plugin && pluginVersion && compareVersions(pluginVersion, needVersion) >= 0;
 
   const record = async () => {
     if (!plugin) return;
@@ -228,7 +230,7 @@ export function VoiceTuning({ ops, source, plugin, pluginVersion, canInstall, on
               <>
                 <div className="verdict verdict-warn">
                   {pluginVersion
-                    ? t("自動調整人聲需要 {need} 以上的 SoundCheck 外掛，直播軟體目前載入的是 {version}。", { need: VOICE_PLUGIN_VERSION, version: pluginVersion })
+                    ? t("自動調整人聲需要 {need} 以上的 SoundCheck 外掛，直播軟體目前載入的是 {version}。", { need: needVersion, version: pluginVersion })
                     : t("自動調整人聲需要 SoundCheck 外掛，直播軟體目前沒有載入它。")}
                 </div>
                 {canInstall ? (

@@ -268,8 +268,14 @@ export function loadStreamlabsPlugin(): Promise<boolean> {
   return pluginLoad;
 }
 
+/** Requests that name a source; the plugin knows sources by their libobs name, Streamlabs' sourceId. */
+const SOURCE_REQUESTS = new Set(["StartVoiceCapture", "ReadVoiceCapture", "StopVoiceCapture"]);
+
 const pluginLink: PluginLink = {
   async request(requestType, requestData) {
+    if (SOURCE_REQUESTS.has(requestType) && typeof requestData.source === "string") {
+      requestData = { ...requestData, source: sourceIdOf(requestData.source) };
+    }
     try {
       return await sendToPlugin(requestType, requestData);
     } catch (e) {
@@ -390,4 +396,5 @@ export const streamlabsAdapter: SoftwareAdapter = {
   filters,
   sceneCollection: async () => (await streamlabs.request<{ name: string }>("SceneCollectionsService", "activeCollection")).name,
   plugin: pluginLink,
+  voiceFilters: "0.5.1",
 };
