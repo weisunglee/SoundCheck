@@ -9,12 +9,14 @@
 #include "source-meters.hpp"
 #include "stream-pause.hpp"
 #include "tap.hpp"
+#include "voice-filters.hpp"
 
 static Tap g_tap;
 static StreamPause g_pause;
 static SourceMeters g_meters;
 
-const char *const kRequestNames[] = {"GetInfo", "StartTap", "StopTap", "PauseStreamAudio", "Heartbeat", "ResumeStreamAudio", "GetSourceLevels"};
+const char *const kRequestNames[] = {"GetInfo", "StartTap", "StopTap", "PauseStreamAudio", "Heartbeat", "ResumeStreamAudio", "GetSourceLevels",
+                                     "StartVoiceCapture", "ReadVoiceCapture", "StopVoiceCapture"};
 const size_t kRequestCount = sizeof(kRequestNames) / sizeof(kRequestNames[0]);
 
 static void set_error(obs_data_t *response, const char *message)
@@ -106,9 +108,26 @@ static void get_source_levels(const Host &, obs_data_t *, obs_data_t *response)
     g_meters.read(response);
 }
 
+// The voice analyzer's requests (see voice-filters.hpp).
+static void start_voice_capture(const Host &, obs_data_t *request, obs_data_t *response)
+{
+    voice_capture_start(request, response);
+}
+
+static void read_voice_capture(const Host &, obs_data_t *request, obs_data_t *response)
+{
+    voice_capture_read(request, response);
+}
+
+static void stop_voice_capture(const Host &, obs_data_t *request, obs_data_t *response)
+{
+    voice_capture_stop(request, response);
+}
+
 using Handler = void (*)(const Host &, obs_data_t *, obs_data_t *);
-static const Handler kHandlers[] = {get_info,  start_tap,           stop_tap,         pause_stream_audio,
-                                    heartbeat, resume_stream_audio, get_source_levels};
+static const Handler kHandlers[] = {get_info,           start_tap,          stop_tap,         pause_stream_audio,
+                                    heartbeat,          resume_stream_audio, get_source_levels, start_voice_capture,
+                                    read_voice_capture, stop_voice_capture};
 static_assert(sizeof(kHandlers) / sizeof(kHandlers[0]) == sizeof(kRequestNames) / sizeof(kRequestNames[0]));
 
 bool handle_request(const Host &host, const char *type, obs_data_t *request, obs_data_t *response)
