@@ -1,5 +1,6 @@
 // Capturing the audio settings of every source as a profile, and applying a profile back to the
 // streaming software. Works with any adapter that has everything profiles save (capabilities.profiles).
+import { invoke } from "@tauri-apps/api/core";
 import type { FilterOps, SoftwareAdapter } from "./adapter";
 import { AUDIO_FILTER_KINDS } from "./adapter";
 import type { AudioSource, MonitorType } from "./types";
@@ -102,6 +103,14 @@ export async function captureProfile(adapter: SoftwareAdapter, name: string, sou
     backup,
     sources: captured,
   };
+}
+
+/** Saves `sources` as an automatic backup profile and prunes the oldest backups. */
+export async function saveBackup(adapter: SoftwareAdapter, sources: AudioSource[]): Promise<void> {
+  const name = backupName();
+  await invoke("profile_save", { name, data: await captureProfile(adapter, name, sources, true) });
+  const backups = (await invoke<{ name: string; backup: boolean }[]>("profiles_list")).filter((p) => p.backup);
+  for (const old of backups.slice(BACKUPS_KEPT)) await invoke("profile_delete", { name: old.name });
 }
 
 /**

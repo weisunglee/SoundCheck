@@ -92,6 +92,8 @@ export interface SoftwareAdapter {
   sceneCollection?(): Promise<string>;
   /** How requests reach the SoundCheck plugin inside the program (sound test, stream meter). */
   plugin?: PluginLink;
+  /** The plugin adds its voice EQ and analyzer filters to this program (voice tuning). */
+  voiceFilters?: boolean;
 }
 
 export interface Capabilities {
@@ -105,6 +107,8 @@ export interface Capabilities {
   plugin: boolean;
   /** Profiles save and restore volume, mute, monitoring, sync offset, tracks and filters (and balance where there is one). */
   profiles: boolean;
+  /** Voice tuning: record the mic through the plugin and set up its filters (needs the plugin loaded). */
+  voiceTuning: boolean;
 }
 
 /** `pluginLoaded`: the SoundCheck plugin answers, which some adapters need for meters. */
@@ -118,7 +122,11 @@ export function capabilitiesOf(adapter: SoftwareAdapter, pluginLoaded = false): 
     filters: Boolean(adapter.filters),
     plugin: Boolean(adapter.plugin),
   };
-  return { ...caps, profiles: caps.monitoringControl && caps.tracksControl && caps.syncOffset && caps.filters };
+  return {
+    ...caps,
+    profiles: caps.monitoringControl && caps.tracksControl && caps.syncOffset && caps.filters,
+    voiceTuning: Boolean(adapter.voiceFilters) && caps.plugin && caps.filters,
+  };
 }
 
 /** Filter kinds that process audio; other filters on a source (chroma key, crop…) are left out. */
@@ -134,6 +142,7 @@ export const AUDIO_FILTER_KINDS = new Set([
   "basic_eq_filter",
   "invert_polarity_filter",
   "vst_filter",
+  "soundcheck_voice_eq",
 ]);
 
 /** Names users see for input kinds; OBS and Streamlabs share libobs kinds (translated where shown). */

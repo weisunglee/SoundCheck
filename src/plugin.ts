@@ -56,6 +56,28 @@ export interface TapStarted {
   channels: number;
 }
 
+/** One read of the voice analyzer's recording (obs-plugin/src/voice-analyzer.cpp). */
+export interface VoiceCaptureChunk {
+  capturing: boolean;
+  sampleRate: number;
+  /** First frame in `data`, the frames in it, all frames recorded so far, and the frames asked for. */
+  from: number;
+  frames: number;
+  total: number;
+  target: number;
+  /** Largest sample magnitude in `data`, 0..1. */
+  peak: number;
+  /** Mono 32-bit float little-endian PCM, base64. */
+  data: string;
+}
+
+/** The first plugin version with the voice EQ and analyzer filters. */
+export const VOICE_PLUGIN_VERSION = "0.5.0";
+
+/** Filter kinds the plugin adds (obs-plugin/src/voice-filters.hpp). */
+export const VOICE_EQ_KIND = "soundcheck_voice_eq";
+export const VOICE_ANALYZER_KIND = "soundcheck_voice_analyzer";
+
 export type Plugin = ReturnType<typeof createPlugin>;
 
 /** The plugin's requests over `link`. Every call rejects with a readable error if the plugin isn't loaded. */
@@ -77,6 +99,11 @@ export function createPlugin(link: PluginLink) {
     pauseStreamAudio: (timeoutMs: number) => request("PauseStreamAudio", { timeoutMs }),
     heartbeat: () => request("Heartbeat"),
     resumeStreamAudio: () => request("ResumeStreamAudio"),
+    /** Starts recording `seconds` with the voice analyzer filter on `source`. */
+    startVoiceCapture: (source: string, seconds: number) => request<{ sampleRate: number }>("StartVoiceCapture", { source, seconds }),
+    /** What the analyzer on `source` recorded from frame `from` on (at most a second per call). */
+    readVoiceCapture: (source: string, from: number) => request<VoiceCaptureChunk>("ReadVoiceCapture", { source, from }),
+    stopVoiceCapture: (source: string) => request("StopVoiceCapture", { source }),
   };
 }
 

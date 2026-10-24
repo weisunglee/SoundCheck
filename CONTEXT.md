@@ -46,3 +46,9 @@ offset, tracks and audio filters, applied back in one go.
 **系統聲音 (system audio)**: what is playing on the computer outside the streaming software (apps
 and devices from the OS), compared against the software's captures to find sound that viewers
 can't hear yet.
+
+**自動調整人聲 (voice tuning)**: record the user talking into a mic, straight from the mic before
+its filters (the plugin's **分析器 (voice analyzer)** filter, placed first in the chain only while
+recording), analyze the voice and set up the mic's filters: the plugin's **人聲 EQ (voice EQ)**
+before and after a compressor, and a limiter. The filters it replaces are backed up and can be
+put back in one click.

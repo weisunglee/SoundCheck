@@ -9,13 +9,14 @@
 #include "obs-websocket-api.h"
 #include "requests.hpp"
 #include "tap.hpp"
+#include "voice-filters.hpp"
 
 OBS_DECLARE_MODULE()
 
 extern "C" const char *obs_module_name(void) { return "SoundCheck"; }
 extern "C" const char *obs_module_description(void)
 {
-    return "Companion for the SoundCheck app: lets it listen to the stream mix.";
+    return "Companion for the SoundCheck app: lets it listen to the stream mix and tune a voice.";
 }
 
 static const Host kHost = {get_stream_tracks, [] { return obs_frontend_streaming_active(); }};
@@ -39,6 +40,8 @@ bool obs_module_load(void)
         blog(LOG_ERROR, "[soundcheck] socket setup failed");
         return false;
     }
+    register_voice_eq();
+    register_voice_analyzer();
     obs_frontend_add_event_callback(on_frontend_event, nullptr);
     blog(LOG_INFO, "[soundcheck] module loaded (version %s)", PLUGIN_VERSION);
     return true;

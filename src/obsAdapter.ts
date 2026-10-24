@@ -287,6 +287,7 @@ export const obsAdapter: SoftwareAdapter = {
   filters,
   sceneCollection: async () => (await obs.call("GetSceneCollectionList")).currentSceneCollectionName,
   plugin: obsPluginLink,
+  voiceFilters: true,
 };
 
 /** Whether OBS is streaming or recording right now (for warnings before it has to close). */

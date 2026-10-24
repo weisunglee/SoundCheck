@@ -18,6 +18,8 @@ const MESSAGES: &[[&str; 5]] = &[
     ["刪除設定檔失敗：{e}", "删除配置失败：{e}", "Couldn't delete the profile: {e}", "プロファイルを削除できません：{e}", "프로필을 삭제할 수 없습니다: {e}"],
     ["無法讀取 {path}：{e}", "无法读取 {path}：{e}", "Couldn't read {path}: {e}", "{path} を読み込めません：{e}", "{path}을(를) 읽을 수 없습니다: {e}"],
     ["直播軟體的 WebSocket 設定格式不符：{e}", "直播软件的 WebSocket 设置格式不符：{e}", "The streaming software's WebSocket settings file is not valid: {e}", "配信ソフトの WebSocket 設定ファイルの形式が正しくありません：{e}", "방송 프로그램의 WebSocket 설정 파일 형식이 올바르지 않습니다: {e}"],
+    ["錄音的取樣率不正確", "录音的采样率不正确", "The recording's sample rate is not valid.", "録音のサンプリングレートが正しくありません。", "녹음의 샘플링 레이트가 올바르지 않습니다."],
+    ["外掛傳來的錄音格式不正確", "插件传来的录音格式不正确", "The recording from the plugin is not in the expected format.", "プラグインから届いた録音の形式が正しくありません。", "플러그인에서 받은 녹음 형식이 올바르지 않습니다."],
     ["還沒有錄音", "还没有录音", "Nothing has been recorded yet.", "まだ録音していません。", "아직 녹음하지 않았습니다."],
     ["找不到播放裝置", "找不到播放设备", "No playback device found.", "再生デバイスが見つかりません。", "재생 장치를 찾을 수 없습니다."],
     ["不支援的播放格式：{format}", "不支持的播放格式：{format}", "Unsupported playback format: {format}", "対応していない再生形式です：{format}", "지원하지 않는 재생 형식입니다: {format}"],
