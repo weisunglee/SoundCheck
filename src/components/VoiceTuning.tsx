@@ -4,7 +4,7 @@ import type { FilterOps, SoftwareAdapter } from "../adapter";
 import { t } from "../i18n";
 import { meterPosition } from "../levels";
 import { type Plugin, VOICE_PLUGIN_VERSION, compareVersions } from "../plugin";
-import { saveBackup } from "../profiles";
+import { captureBackup, storeBackup } from "../profiles";
 import type { AudioSource, MonitorType } from "../types";
 import {
   type Applied,
@@ -32,10 +32,12 @@ type Phase =
   | { kind: "intro" }
   | { kind: "recording"; elapsed: number; peak: number }
   | { kind: "analyzing" }
-  | { kind: "result"; analysis: VoiceAnalysis; hasNoiseSuppression: boolean }
-  | { kind: "applying"; analysis: VoiceAnalysis; hasNoiseSuppression: boolean }
-  | { kind: "applied"; analysis: VoiceAnalysis; hasNoiseSuppression: boolean; applied: Applied; tuned: boolean }
-  | { kind: "done"; kept: boolean }
+  /**
+   * `applied` is the tuned chain put in place for listening (the filters it replaces only turned
+   * off) once the user first switches to it; `tuned` says which of the two is playing.
+   */
+  | { kind: "result"; analysis: VoiceAnalysis; hasNoiseSuppression: boolean; applied: Applied | null; tuned: boolean }
+  | { kind: "done" }
   | { kind: "error"; message: string };
 
 interface Props {
@@ -53,6 +55,8 @@ interface Props {
   onClose: () => void;
 }
 
+type Result = Extract<Phase, { kind: "result" }>;
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const message = (e: unknown) => String((e as Error)?.message ?? e);
 
@@ -65,6 +69,10 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
   const [error, setError] = useState<string | null>(null);
   const stopRef = useRef(false);
   const recordingRef = useRef(false);
+  /** The chain being listened to and not applied yet: closing or recording again takes it off. */
+  const previewRef = useRef<Applied | null>(null);
+  /** The source as it was before listening, saved as a backup profile only if the user applies. */
+  const backupRef = useRef<Awaited<ReturnType<typeof captureBackup>> | null>(null);
 
   // Listening from the dialog turns on monitoring that keeps the stream as it is; closing the
   // dialog puts back the monitoring the source had when it opened.
@@ -80,7 +88,8 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
   );
   const listening = source.monitorType !== "off";
 
-  // Closing mid-recording still takes the analyzer off the source.
+  // Closing mid-recording still takes the analyzer off the source, and closing without applying
+  // puts back the filters the source had.
   useEffect(
     () => () => {
       stopRef.current = true;
@@ -88,6 +97,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
         plugin?.stopVoiceCapture(name).catch(() => {});
         removeAnalyzers(ops, name).catch(() => {});
       }
+      if (previewRef.current) undo(ops, name, previewRef.current).catch(() => {});
     },
     [ops, plugin, name],
   );
@@ -96,6 +106,16 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
 
   const record = async () => {
     if (!plugin) return;
+    // The recording has to hear the mic as it was, so a chain being listened to comes off first.
+    if (previewRef.current) {
+      try {
+        await undo(ops, name, previewRef.current);
+        previewRef.current = null;
+      } catch (e) {
+        setError(t("直播軟體沒有接受這個變更：{error}", { error: message(e) }));
+        return;
+      }
+    }
     stopRef.current = false;
     recordingRef.current = true;
     setError(null);
@@ -130,7 +150,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
       setPhase({ kind: "analyzing" });
       const analysis = await invoke<VoiceAnalysis>("voice_analyze", { chunks, sampleRate });
       const hasNoiseSuppression = (await ops.list(name)).some((f) => isNoiseSuppression(f.kind) && f.enabled);
-      setPhase({ kind: "result", analysis, hasNoiseSuppression });
+      setPhase({ kind: "result", analysis, hasNoiseSuppression, applied: null, tuned: false });
     } catch (e) {
       setPhase({ kind: "error", message: message(e) });
     } finally {
@@ -155,31 +175,42 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
     }
   };
 
-  const apply = (analysis: VoiceAnalysis, hasNoiseSuppression: boolean) =>
-    run(async () => {
-      if (!analysis.plan) return;
-      setPhase({ kind: "applying", analysis, hasNoiseSuppression });
-      // A backup the user can still apply from Profiles after closing this.
-      await saveBackup(adapter, [source]);
-      const applied = await applyPlan(ops, name, analysis.plan);
-      setPhase({ kind: "applied", analysis, hasNoiseSuppression, applied, tuned: true });
-      // applyPlan puts things back itself when a step fails.
-    }, () => setPhase({ kind: "result", analysis, hasNoiseSuppression }));
+  /** Puts the tuned chain in place the first time, after capturing the source as it is. */
+  const tune = async (p: Result): Promise<Applied> => {
+    if (p.applied) return p.applied;
+    if (!p.analysis.plan) throw new Error("no plan");
+    backupRef.current = await captureBackup(adapter, [source]);
+    const applied = await applyPlan(ops, name, p.analysis.plan);
+    // applyPlan puts things back itself when a step fails.
+    previewRef.current = applied;
+    return applied;
+  };
 
-  const switchTo = (p: Extract<Phase, { kind: "applied" }>, tuned: boolean) =>
+  /** Listens to the tuned chain or to the original; nothing is kept until "Apply". */
+  const listenTo = (p: Result, tuned: boolean) =>
     run(async () => {
-      await compare(ops, name, p.applied, tuned);
-      setPhase({ ...p, tuned });
+      if (!p.applied && !tuned) return;
+      const applied = await tune(p);
+      if (p.applied) await compare(ops, name, applied, tuned);
+      setPhase({ ...p, applied, tuned });
     });
 
-  // Closing after applying keeps the tuned chain, as "Keep" does.
+  const apply = (p: Result) =>
+    run(async () => {
+      const applied = await tune(p);
+      // A backup the user can still apply from Profiles; only applying makes one.
+      if (backupRef.current) await storeBackup(backupRef.current);
+      await finish(ops, name, applied);
+      previewRef.current = null;
+      setPhase({ kind: "done" });
+    });
+
   const close = () => {
-    if (phase.kind === "applied") finish(ops, name, phase.applied).catch(() => {});
     if (phase.kind === "recording") stopRef.current = true;
     onClose();
   };
 
-  const result = phase.kind === "result" || phase.kind === "applying" || phase.kind === "applied" ? phase : null;
+  const result = phase.kind === "result" ? phase : null;
   const blocking = result?.analysis.issues.filter((i) => i.blocking) ?? [];
   const notes = result?.analysis.issues.filter((i) => !i.blocking && i.kind !== "someNoise") ?? [];
 
@@ -196,7 +227,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
         {phase.kind === "intro" && (
           <div className="dialog-body">
             <p className="dialog-lead">
-              {t("錄一段你說話的聲音，分析你的聲線，再自動設定濾鏡：切掉低頻雜音、讓聲音不悶、字更清楚，音量也調到剛好。套用前會先備份目前的濾鏡，不喜歡可以一鍵復原。")}
+              {t("錄一段你說話的聲音，分析你的聲線，再自動設定濾鏡：切掉低頻雜音、讓聲音不悶、字更清楚，音量也調到剛好。套用前可以先切換試聽；套用時會先備份目前的濾鏡。")}
             </p>
             {pluginVersion === undefined ? (
               <p className="hint">{t("正在檢查外掛…")}</p>
@@ -302,16 +333,16 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
               )
             )}
 
-            {phase.kind === "applied" ? (
+            {blocking.length === 0 && result.analysis.plan && (
               <>
-                <div className="row-label">{t("比較")}</div>
+                <div className="row-label">{t("試聽")}</div>
                 <div className="compare-row">
-                  <div className="seg seg-inline" role="group" aria-label={t("比較")}>
-                    <button type="button" aria-pressed={phase.tuned} disabled={busy} onClick={() => switchTo(phase, true)}>
-                      {t("調整後")}
-                    </button>
-                    <button type="button" aria-pressed={!phase.tuned} disabled={busy} onClick={() => switchTo(phase, false)}>
+                  <div className="seg seg-inline" role="group" aria-label={t("試聽")}>
+                    <button type="button" aria-pressed={!result.tuned} disabled={busy} onClick={() => listenTo(result, false)}>
                       {t("原本")}
+                    </button>
+                    <button type="button" aria-pressed={result.tuned} disabled={busy} onClick={() => listenTo(result, true)}>
+                      {t("調整後")}
                     </button>
                   </div>
                   {onMonitorType && (
@@ -328,49 +359,23 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                 </div>
                 <p className="hint">
                   {onMonitorType
-                    ? t("切換會馬上生效。用耳機監聽就能聽出差別（請戴耳機，用喇叭會有回音），觀眾聽到的聲音不受影響。關閉這個視窗後，監聽會恢復成原本的設定。")
-                    : t("切換會馬上生效。開啟這個來源的監聽，或用「試音」錄一段，就能聽出差別。")}
+                    ? t("切到「調整後」會先暫時加上濾鏡讓你試聽，按「套用」才會保留；關閉視窗或重錄會恢復原本的濾鏡。用耳機監聽就能聽出差別（請戴耳機，用喇叭會有回音），觀眾聽到的聲音不受影響。")
+                    : t("切到「調整後」會先暫時加上濾鏡讓你試聽，按「套用」才會保留；關閉視窗或重錄會恢復原本的濾鏡。開啟這個來源的監聽，或用「試音」錄一段，就能聽出差別。")}
                 </p>
-                <div className="row">
-                  <button
-                    type="button"
-                    className="btn primary"
-                    disabled={busy}
-                    onClick={() => run(async () => (await finish(ops, name, phase.applied), setPhase({ kind: "done", kept: true })))}
-                  >
-                    <Icon name="check" size={15} />
-                    {t("保留調整")}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={busy}
-                    onClick={() => run(async () => (await undo(ops, name, phase.applied), setPhase({ kind: "done", kept: false })))}
-                  >
-                    <Icon name="undo-2" size={15} />
-                    {t("復原")}
-                  </button>
-                </div>
               </>
-            ) : (
-              <div className="row">
-                {blocking.length === 0 && result.analysis.plan && (
-                  <button
-                    type="button"
-                    className="btn primary"
-                    disabled={busy || phase.kind === "applying"}
-                    onClick={() => apply(result.analysis, result.hasNoiseSuppression)}
-                  >
-                    <Icon name="wand-sparkles" size={15} />
-                    {phase.kind === "applying" ? t("套用中…") : t("套用")}
-                  </button>
-                )}
-                <button type="button" className="btn" disabled={busy || phase.kind === "applying"} onClick={record}>
-                  <Icon name="rotate-ccw" size={15} />
-                  {t("重錄")}
-                </button>
-              </div>
             )}
+            <div className="row">
+              {blocking.length === 0 && result.analysis.plan && (
+                <button type="button" className="btn primary" disabled={busy} onClick={() => apply(result)}>
+                  <Icon name="check" size={15} />
+                  {t("套用")}
+                </button>
+              )}
+              <button type="button" className="btn" disabled={busy} onClick={record}>
+                <Icon name="rotate-ccw" size={15} />
+                {t("重錄")}
+              </button>
+            </div>
             {blocking.length === 0 && result.analysis.plan && <SpectrumChart bands={result.analysis.bands} />}
           </div>
         )}
@@ -378,9 +383,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
         {phase.kind === "done" && (
           <div className="dialog-body">
             <div className="verdict verdict-ok">
-              {phase.kept
-                ? t("已經保留新的設定。原本的濾鏡有備份在「設定檔」裡。")
-                : t("已經復原成原本的濾鏡。")}
+              {t("已經套用新的設定。原本的濾鏡有備份在「設定檔」裡。")}
             </div>
             <button type="button" className="btn" onClick={onClose}>
               {t("關閉")}
