@@ -10,7 +10,6 @@ interface Summary {
   name: string;
   savedAt: string | null;
   sourceCount: number;
-  backup: boolean;
 }
 
 interface Props {

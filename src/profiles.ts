@@ -1,21 +1,11 @@
 // Capturing the audio settings of every source as a profile, and applying a profile back to the
 // streaming software. Works with any adapter that has everything profiles save (capabilities.profiles).
-import { invoke } from "@tauri-apps/api/core";
 import type { FilterOps, SoftwareAdapter } from "./adapter";
 import { AUDIO_FILTER_KINDS } from "./adapter";
 import type { AudioSource, MonitorType } from "./types";
 import { t } from "./i18n";
 
 const PROFILE_VERSION = 1;
-/** Older automatic backups (saved right before applying a profile) beyond this many are deleted. */
-export const BACKUPS_KEPT = 5;
-
-export function backupName(date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const time = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}.${pad(date.getMinutes())}.${pad(date.getSeconds())}`;
-  return t("套用前的備份 {time}", { time });
-}
-
 interface ProfileFilter {
   name: string;
   kind: string;
@@ -42,8 +32,6 @@ export interface Profile {
   savedAt: string;
   /** Scene collection the profile was saved in; source names only mean the same thing there. */
   sceneCollection?: string;
-  /** Saved automatically before applying another profile; old ones are pruned. */
-  backup?: boolean;
   sources: ProfileSource[];
 }
 
@@ -79,7 +67,7 @@ export function profileMonitorType(saved: string): MonitorType {
   return LEGACY_MONITOR_TYPES[saved] ?? (saved === "monitorOnly" || saved === "monitorAndOutput" ? saved : "off");
 }
 
-export async function captureProfile(adapter: SoftwareAdapter, name: string, sources: AudioSource[], backup = false): Promise<Profile> {
+export async function captureProfile(adapter: SoftwareAdapter, name: string, sources: AudioSource[]): Promise<Profile> {
   const sw = profileAdapter(adapter);
   const captured: ProfileSource[] = [];
   for (const s of sources) {
@@ -100,22 +88,8 @@ export async function captureProfile(adapter: SoftwareAdapter, name: string, sou
     name,
     savedAt: new Date().toISOString(),
     sceneCollection: await sw.sceneCollection?.(),
-    backup,
     sources: captured,
   };
-}
-
-/** Captures `sources` as an automatic backup profile, to save with storeBackup. */
-export async function captureBackup(adapter: SoftwareAdapter, sources: AudioSource[]): Promise<{ name: string; data: Profile }> {
-  const name = backupName();
-  return { name, data: await captureProfile(adapter, name, sources, true) };
-}
-
-/** Saves a backup from captureBackup and prunes the oldest backups. */
-export async function storeBackup(backup: { name: string; data: Profile }): Promise<void> {
-  await invoke("profile_save", backup);
-  const backups = (await invoke<{ name: string; backup: boolean }[]>("profiles_list")).filter((p) => p.backup);
-  for (const old of backups.slice(BACKUPS_KEPT)) await invoke("profile_delete", { name: old.name });
 }
 
 /**

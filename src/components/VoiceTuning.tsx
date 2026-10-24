@@ -1,10 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import type { FilterOps, SoftwareAdapter } from "../adapter";
+import type { FilterOps } from "../adapter";
 import { t } from "../i18n";
 import { meterPosition } from "../levels";
 import { type Plugin, VOICE_PLUGIN_VERSION, compareVersions } from "../plugin";
-import { captureBackup, storeBackup } from "../profiles";
 import type { AudioSource, MonitorType } from "../types";
 import {
   type Applied,
@@ -41,7 +40,6 @@ type Phase =
   | { kind: "error"; message: string };
 
 interface Props {
-  adapter: SoftwareAdapter;
   ops: FilterOps;
   source: AudioSource;
   plugin: Plugin | null;
@@ -60,7 +58,7 @@ type Result = Extract<Phase, { kind: "result" }>;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const message = (e: unknown) => String((e as Error)?.message ?? e);
 
-export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canInstall, onInstallPlugin, onMonitorType, onClose }: Props) {
+export function VoiceTuning({ ops, source, plugin, pluginVersion, canInstall, onInstallPlugin, onMonitorType, onClose }: Props) {
   const name = source.name;
   const [seconds, setSeconds] = useState(15);
   const [phase, setPhase] = useState<Phase>({ kind: "intro" });
@@ -71,8 +69,6 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
   const recordingRef = useRef(false);
   /** The chain being listened to and not applied yet: closing or recording again takes it off. */
   const previewRef = useRef<Applied | null>(null);
-  /** The source as it was before listening, saved as a backup profile only if the user applies. */
-  const backupRef = useRef<Awaited<ReturnType<typeof captureBackup>> | null>(null);
 
   // Listening from the dialog turns on monitoring that keeps the stream as it is; closing the
   // dialog puts back the monitoring the source had when it opened.
@@ -175,11 +171,10 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
     }
   };
 
-  /** Puts the tuned chain in place the first time, after capturing the source as it is. */
+  /** Puts the tuned chain in place the first time. */
   const tune = async (p: Result): Promise<Applied> => {
     if (p.applied) return p.applied;
     if (!p.analysis.plan) throw new Error("no plan");
-    backupRef.current = await captureBackup(adapter, [source]);
     const applied = await applyPlan(ops, name, p.analysis.plan);
     // applyPlan puts things back itself when a step fails.
     previewRef.current = applied;
@@ -198,8 +193,6 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
   const apply = (p: Result) =>
     run(async () => {
       const applied = await tune(p);
-      // A backup the user can still apply from Profiles; only applying makes one.
-      if (backupRef.current) await storeBackup(backupRef.current);
       await finish(ops, name, applied);
       previewRef.current = null;
       setPhase({ kind: "done" });
@@ -227,7 +220,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
         {phase.kind === "intro" && (
           <div className="dialog-body">
             <p className="dialog-lead">
-              {t("錄一段你說話的聲音，分析你的聲線，再自動設定濾鏡：切掉低頻雜音、讓聲音不悶、字更清楚，音量也調到剛好。套用前可以先切換試聽；套用時會先備份目前的濾鏡。")}
+              {t("錄一段你說話的聲音，分析你的聲線，再自動設定濾鏡：切掉低頻雜音、讓聲音不悶、字更清楚，音量也調到剛好。套用前可以先切換試聽。")}
             </p>
             {pluginVersion === undefined ? (
               <p className="hint">{t("正在檢查外掛…")}</p>
@@ -383,7 +376,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
         {phase.kind === "done" && (
           <div className="dialog-body">
             <div className="verdict verdict-ok">
-              {t("已經套用新的設定。原本的濾鏡有備份在「設定檔」裡。")}
+              {t("已經套用新的設定。")}
             </div>
             <button type="button" className="btn" onClick={onClose}>
               {t("關閉")}
