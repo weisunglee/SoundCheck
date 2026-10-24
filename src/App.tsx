@@ -48,8 +48,8 @@ export default function App() {
   const [profilesOpen, setProfilesOpen] = useState(false);
   const [flashing, setFlashing] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // The prompt at start waits until a sound test is closed.
-  const updater = useUpdater(soundTestOpen);
+  // The prompt at start waits until a sound test or voice tuning is closed.
+  const updater = useUpdater(soundTestOpen || voiceFor !== null);
 
   // Scrolls to a source's card and highlights it briefly; the layout itself never changes.
   const jumpTo = (name: string) => {
