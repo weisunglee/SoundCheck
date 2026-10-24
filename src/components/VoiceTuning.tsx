@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import { meterPosition } from "../levels";
 import { type Plugin, VOICE_PLUGIN_VERSION, compareVersions } from "../plugin";
 import { saveBackup } from "../profiles";
-import type { AudioSource } from "../types";
+import type { AudioSource, MonitorType } from "../types";
 import {
   type Applied,
   type VoiceAnalysis,
@@ -47,13 +47,15 @@ interface Props {
   /** The plugin can be installed from here (the software runs on this computer). */
   canInstall: boolean;
   onInstallPlugin: () => void;
+  /** Sets the source's monitoring; missing where the software can't. */
+  onMonitorType?: (type: MonitorType) => void;
   onClose: () => void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const message = (e: unknown) => String((e as Error)?.message ?? e);
 
-export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canInstall, onInstallPlugin, onClose }: Props) {
+export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canInstall, onInstallPlugin, onMonitorType, onClose }: Props) {
   const name = source.name;
   const [seconds, setSeconds] = useState(15);
   const [phase, setPhase] = useState<Phase>({ kind: "intro" });
@@ -62,6 +64,20 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
   const [error, setError] = useState<string | null>(null);
   const stopRef = useRef(false);
   const recordingRef = useRef(false);
+
+  // Listening from the dialog turns on monitoring that keeps the stream as it is; closing the
+  // dialog puts back the monitoring the source had when it opened.
+  const monitorRef = useRef({ original: source.monitorType, current: source.monitorType, set: onMonitorType });
+  monitorRef.current.current = source.monitorType;
+  monitorRef.current.set = onMonitorType;
+  useEffect(
+    () => () => {
+      const m = monitorRef.current;
+      if (m.current !== m.original) m.set?.(m.original);
+    },
+    [],
+  );
+  const listening = source.monitorType !== "off";
 
   // Closing mid-recording still takes the analyzer off the source.
   useEffect(
@@ -296,7 +312,24 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                     {t("原本")}
                   </button>
                 </div>
-                <p className="hint">{t("切換會馬上生效。開啟這個來源的監聽，或用「試音」錄一段，就能聽出差別。")}</p>
+                {onMonitorType && (
+                  <div className="row">
+                    <button
+                      type="button"
+                      className="btn"
+                      aria-pressed={listening}
+                      onClick={() => onMonitorType(listening ? "off" : "monitorAndOutput")}
+                    >
+                      <Icon name="headphones" size={15} />
+                      {listening ? t("停止監聽") : t("用耳機監聽")}
+                    </button>
+                  </div>
+                )}
+                <p className="hint">
+                  {onMonitorType
+                    ? t("切換會馬上生效。用耳機監聽就能聽出差別（請戴耳機，用喇叭會有回音），觀眾聽到的聲音不受影響。關閉這個視窗後，監聽會恢復成原本的設定。")
+                    : t("切換會馬上生效。開啟這個來源的監聽，或用「試音」錄一段，就能聽出差別。")}
+                </p>
                 <div className="row">
                   <button
                     type="button"

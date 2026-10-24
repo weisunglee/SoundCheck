@@ -373,6 +373,7 @@ export default function App() {
             setFiltersFor(null);
             openPluginDialog();
           }}
+          onMonitorType={caps.monitoringControl ? (type) => audio.setMonitorType(voiceFor, type) : undefined}
           onClose={() => setVoiceFor(null)}
         />
       )}
