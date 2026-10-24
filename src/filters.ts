@@ -45,6 +45,13 @@ export const FILTERS: Record<string, FilterInfo> = {
     order: 30,
     initial: {},
   },
+  soundcheck_voice_eq: {
+    kind: "soundcheck_voice_eq",
+    label: msg("人聲 EQ"),
+    what: msg("SoundCheck 外掛的人聲等化器：切掉低頻轟轟聲、減少悶的聲音、讓字更清楚，也能壓低刺耳的齒音。通常由「自動調整人聲」設定。"),
+    order: 32,
+    initial: {},
+  },
   compressor_filter: {
     kind: "compressor_filter",
     label: msg("壓縮器"),

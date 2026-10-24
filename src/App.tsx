@@ -14,6 +14,7 @@ import { StreamlabsPluginInstall } from "./components/StreamlabsPluginInstall";
 import { statusLabel } from "./components/StatusBadge";
 import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
+import { VoiceTuning } from "./components/VoiceTuning";
 import { capabilitiesOf } from "./adapter";
 import { useAudio } from "./audio";
 import { useConnection } from "./connection";
@@ -39,6 +40,7 @@ export default function App() {
   // steps when the user closes Streamlabs as the dialog asks.
   const [pluginFor, setPluginFor] = useState<SoftwareId | null>(null);
   const [filtersFor, setFiltersFor] = useState<string | null>(null);
+  const [voiceFor, setVoiceFor] = useState<string | null>(null);
   const [addStart, setAddStart] = useState<AddSourceStart | null>(null);
   const [soundTestPlaying, setSoundTestPlaying] = useState(false);
   const [profilesOpen, setProfilesOpen] = useState(false);
@@ -332,7 +334,32 @@ export default function App() {
           onClose={() => setAddStart(null)}
         />
       )}
-      {filtersFor && adapter?.filters && <FilterWizard ops={adapter.filters} sourceName={filtersFor} inputDb={audio.inputDb[filtersFor] ?? null} onClose={() => setFiltersFor(null)} />}
+      {filtersFor && adapter?.filters && (
+        <FilterWizard
+          ops={adapter.filters}
+          sourceName={filtersFor}
+          onVoiceTuning={caps.voiceTuning ? () => setVoiceFor(filtersFor) : undefined}
+          inputDb={audio.inputDb[filtersFor] ?? null}
+          onClose={() => setFiltersFor(null)}
+        />
+      )}
+      {voiceFor && adapter?.filters && sources.some((s) => s.name === voiceFor) && (
+        <VoiceTuning
+          adapter={adapter}
+          ops={adapter.filters}
+          source={sources.find((s) => s.name === voiceFor)!}
+          plugin={plugin}
+          pluginVersion={pluginInfo === undefined ? undefined : (pluginInfo?.pluginVersion ?? null)}
+          canInstall={local}
+          onInstallPlugin={() => {
+            // The install dialog sits under these two.
+            setVoiceFor(null);
+            setFiltersFor(null);
+            openPluginDialog();
+          }}
+          onClose={() => setVoiceFor(null)}
+        />
+      )}
     </div>
   );
 }

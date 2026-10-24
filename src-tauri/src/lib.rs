@@ -9,6 +9,7 @@ mod sound_test;
 mod streamlabs_plugin;
 mod stream_tap;
 mod system_audio;
+mod voice_analysis;
 
 use tauri::Manager;
 
@@ -64,6 +65,7 @@ pub fn run() {
             system_audio::system_audio_snapshot,
             system_audio::device_listen_start,
             system_audio::device_listen_stop,
+            voice_analysis::voice_analyze,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

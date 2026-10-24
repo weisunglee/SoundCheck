@@ -22,6 +22,8 @@ add_library(${CMAKE_PROJECT_NAME} MODULE
   src/source-meters.cpp
   src/stream-pause.cpp
   src/tap.cpp
+  src/voice-analyzer.cpp
+  src/voice-eq.cpp
 )
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
   OBS::libobs
