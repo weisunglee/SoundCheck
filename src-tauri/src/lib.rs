@@ -9,6 +9,7 @@ mod sound_test;
 mod streamlabs_plugin;
 mod stream_tap;
 mod system_audio;
+mod updates;
 mod voice_analysis;
 
 use tauri::Manager;
@@ -26,6 +27,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(sound_test::SoundTestState::default())
         .manage(stream_tap::StreamTapState::default())
         .manage(slobs::Slobs::default())
@@ -65,6 +68,7 @@ pub fn run() {
             system_audio::system_audio_snapshot,
             system_audio::device_listen_start,
             system_audio::device_listen_stop,
+            updates::can_install_updates,
             voice_analysis::voice_analyze,
         ])
         .run(tauri::generate_context!())

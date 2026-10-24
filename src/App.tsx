@@ -14,6 +14,7 @@ import { StreamlabsPluginInstall } from "./components/StreamlabsPluginInstall";
 import { statusLabel } from "./components/StatusBadge";
 import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { VoiceTuning } from "./components/VoiceTuning";
 import { capabilitiesOf } from "./adapter";
 import { useAudio } from "./audio";
@@ -24,6 +25,7 @@ import { streamlabsAdapter } from "./streamlabsAdapter";
 import { SoundHold, type SourceWithStatus, itemsToHide, itemsToShow, programAudibility, scenesContaining, sourceStatus } from "./status";
 import { useStreamTap } from "./streamTap";
 import { type ThemeChoice, useTheme } from "./theme";
+import { useUpdater } from "./updater";
 import type { SoftwareId } from "./software";
 import type { AudioSource } from "./types";
 import { LANGUAGES, type Lang, t, useLanguage } from "./i18n";
@@ -46,6 +48,8 @@ export default function App() {
   const [profilesOpen, setProfilesOpen] = useState(false);
   const [flashing, setFlashing] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // The prompt at start waits until a sound test or voice tuning is closed.
+  const updater = useUpdater(soundTestOpen || voiceFor !== null);
 
   // Scrolls to a source's card and highlights it briefly; the layout itself never changes.
   const jumpTo = (name: string) => {
@@ -138,6 +142,14 @@ export default function App() {
       </button>
       )}
       <SoftwarePicker compact />
+      {updater.pending ? (
+        <button type="button" className="btn warn" onClick={updater.show}>
+          <Icon name="circle-arrow-up" size={15} />
+          {t("新版本 {version}", { version: updater.pending })}
+        </button>
+      ) : (
+        <IconButton icon="circle-arrow-up" label={t("檢查更新")} onClick={updater.checkNow} />
+      )}
       <label className="with-icon" title={t("主題")}>
         <Icon name="sun-moon" size={15} />
         <select className="select" aria-label={t("主題")} value={theme} onChange={(e) => setTheme(e.target.value as ThemeChoice)}>
@@ -172,11 +184,14 @@ export default function App() {
     )
   );
 
+  const updateDialog = updater.open && <UpdateDialog updater={updater} />;
+
   if (!state) {
     return (
       <div className="app">
         {header}
         {pluginDialog}
+        {updateDialog}
         <div className="empty">
           {connection.kind === "failed" ? (
             <ConnectionGuide failure={connection} presence={presence} />
@@ -222,6 +237,7 @@ export default function App() {
     <div className="app">
       {header}
       {pluginDialog}
+      {updateDialog}
       {audio.error && <div className="error-bar">{audio.error}</div>}
       {local && caps.plugin && pluginInfo === null && (
         <div className="notice-bar">
