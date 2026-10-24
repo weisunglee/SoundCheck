@@ -105,10 +105,15 @@ export async function captureProfile(adapter: SoftwareAdapter, name: string, sou
   };
 }
 
-/** Saves `sources` as an automatic backup profile and prunes the oldest backups. */
-export async function saveBackup(adapter: SoftwareAdapter, sources: AudioSource[]): Promise<void> {
+/** Captures `sources` as an automatic backup profile, to save with storeBackup. */
+export async function captureBackup(adapter: SoftwareAdapter, sources: AudioSource[]): Promise<{ name: string; data: Profile }> {
   const name = backupName();
-  await invoke("profile_save", { name, data: await captureProfile(adapter, name, sources, true) });
+  return { name, data: await captureProfile(adapter, name, sources, true) };
+}
+
+/** Saves a backup from captureBackup and prunes the oldest backups. */
+export async function storeBackup(backup: { name: string; data: Profile }): Promise<void> {
+  await invoke("profile_save", backup);
   const backups = (await invoke<{ name: string; backup: boolean }[]>("profiles_list")).filter((p) => p.backup);
   for (const old of backups.slice(BACKUPS_KEPT)) await invoke("profile_delete", { name: old.name });
 }
