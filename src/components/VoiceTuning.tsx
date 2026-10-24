@@ -185,7 +185,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
 
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="voice-title">
-      <div className="dialog">
+      <div className="dialog dialog-wide">
         <div className="dialog-head">
           <h2 id="voice-title">{t("自動調整人聲：{source}", { source: name })}</h2>
           <IconButton icon="x" label={t("關閉")} className="close" onClick={close} />
@@ -295,7 +295,6 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                       <li key={line}>{line}</li>
                     ))}
                   </ul>
-                  <SpectrumChart bands={result.analysis.bands} />
                   {Math.abs(source.volumeDb) >= 0.5 && (
                     <p className="hint">{t("這個來源的音量推桿目前在 {db} dB。上面的音量是以推桿在 0 dB 計算的。", { db: source.volumeDb.toFixed(1) })}</p>
                   )}
@@ -372,6 +371,7 @@ export function VoiceTuning({ adapter, ops, source, plugin, pluginVersion, canIn
                 </button>
               </div>
             )}
+            {blocking.length === 0 && result.analysis.plan && <SpectrumChart bands={result.analysis.bands} />}
           </div>
         )}
 
