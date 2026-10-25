@@ -19,7 +19,7 @@ export interface Notice {
 /** Oldest first. Texts are translated where shown. */
 export const NOTICES: Notice[] = [
   {
-    version: "0.5.0",
+    version: "0.4.1",
     title: msg("新功能：自動調整人聲"),
     body: msg("說一段話，自動調好麥克風的等化、壓縮和音量。"),
     action: "voiceTuning",
