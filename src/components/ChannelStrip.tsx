@@ -40,6 +40,8 @@ interface Props {
   onAddStreamTracks: () => void;
   /** Shows or hides the source in the current scene (the eye toggle). */
   onVisible: (visible: boolean) => void;
+  /** Offers voice tuning on this card (an untuned mic); left out otherwise. */
+  voiceSuggestion?: { open: () => void; dismiss: () => void };
 }
 
 export function ChannelStrip(props: Props) {
@@ -233,6 +235,23 @@ export function ChannelStrip(props: Props) {
           {source.filters.length === 0 ? t("加濾鏡") : t("調整濾鏡")}
         </button>
       </div>
+      {props.voiceSuggestion && (
+        <div className="voice-suggest">
+          <Icon name="wand-sparkles" size={15} />
+          <div className="voice-suggest-text">
+            <div className="voice-suggest-title">{t("讓你的聲音更好聽")}</div>
+            <div className="hint">{t("說一段話，自動調好等化、壓縮和音量")}</div>
+          </div>
+          <div className="voice-suggest-actions">
+            <button type="button" className="btn small primary" onClick={props.voiceSuggestion.open}>
+              {t("自動調整人聲")}
+            </button>
+            <button type="button" className="link" onClick={props.voiceSuggestion.dismiss}>
+              {t("不用了")}
+            </button>
+          </div>
+        </div>
+      )}
       </div>
       )}
     </div>
