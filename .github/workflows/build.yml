@@ -1,25 +1,29 @@
-# Checks and builds SoundCheck for Windows and macOS, with the plugin bundled, on every pull
-# request and every push to main, and publishes a release when the version changes.
+# Checks every pull request, and builds SoundCheck for Windows and macOS, with the plugin
+# bundled, only when run by hand, so the slow builds don't run on every change.
 #
-# - Pull request, push to main, or a manual run (Actions → Build → Run workflow): runs the
-#   checks and tests, builds both platforms, and keeps the installers as workflow artifacts.
-# - Push to main that changes the version in src-tauri/tauri.conf.json to one without a
-#   v<version> tag yet: the builds go into a draft release v<version> instead, which is
-#   published once the checks pass and both platforms are in it. Other pushes only check.
+# - Pull request: type-check, unit tests and the translation check.
+# - Manual run (Actions → Build → Run workflow): the checks, then both platforms, with the
+#   installers kept as workflow artifacts.
+# - Manual run on main with "release" ticked: the builds go into a draft release v<version>,
+#   the version in src-tauri/tauri.conf.json, which must not have a tag yet. The draft is
+#   published once the checks pass and both platforms are in it.
 name: Build
 
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      release:
+        description: Release v<version> from src-tauri/tauri.conf.json (main only)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 concurrency:
   group: build-${{ github.ref }}
-  # A newer push to a pull request replaces its checks; runs on main always finish.
+  # A newer push to a pull request replaces its checks; manual runs always finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -42,36 +46,29 @@ jobs:
 
   version:
     name: Check version
+    # Pull requests only run the checks; the builds below need this job.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
       release: ${{ steps.version.outputs.release }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - id: version
-        name: Decide whether this push releases a new version
+        name: Decide whether this run releases a new version
         env:
-          BEFORE: ${{ github.event.before }}
+          RELEASE: ${{ inputs.release }}
         run: |
           version=$(jq -r .version src-tauri/tauri.conf.json)
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          # The version before this push; empty for a manual run, a pull request or a new branch.
-          previous=""
-          if [ "$GITHUB_EVENT_NAME" = "push" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            previous=$(git show "$BEFORE:src-tauri/tauri.conf.json" | jq -r .version)
-          fi
-          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
-            release=false; why="$GITHUB_EVENT_NAME: building v$version without a release."
-          elif [ -z "$previous" ]; then
-            release=false; why="No earlier commit to compare with: building v$version without a release."
-          elif [ "$previous" = "$version" ]; then
-            release=false; why="The version stayed v$version: building without a release."
+          if [ "$RELEASE" != "true" ]; then
+            release=false; why="Building v$version without a release."
+          elif [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Releases are made from main, not $GITHUB_REF_NAME."; exit 1
           elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
-            release=false; why="v$version already has a tag: building without a release."
+            echo "::error::v$version already has a tag: bump the version first (npm run bump)."; exit 1
           else
-            release=true; why="The version changed from v$previous to v$version: releasing v$version."
+            release=true; why="Releasing v$version."
           fi
           echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "$why"
