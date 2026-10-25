@@ -138,16 +138,16 @@ Building the plugin follows the obs-plugintemplate layout in `obs-plugin/` (for 
 
 ### Continuous integration and releases
 
-`.github/workflows/build.yml` runs on every pull request and push to `main`: type-check, unit tests and the translation check, then the Rust tests, the plugin and the app on Windows and macOS (universal). The installers are kept as artifacts of each run.
+`.github/workflows/build.yml` runs the type-check, unit tests and the translation check on every pull request. The builds run only by hand (Actions → Build → Run workflow): the checks, then the Rust tests, the plugin and the app on Windows and macOS (universal), with the installers kept as artifacts of the run.
 
-To release, set the new version and push it to `main`:
+To release, set the new version on `main`:
 
 ```sh
 npm run bump -- 0.3.0     # or patch / minor / major; updates every file that holds the version
 git commit -am "Release 0.3.0" && git push
 ```
 
-A push that changes the version in `src-tauri/tauri.conf.json` to one without a tag builds both platforms into a draft release `v0.3.0` and publishes it once the checks pass and both installers are in it.
+Then run the workflow on `main` with "release" ticked. It builds both platforms into a draft release `v0.3.0` and publishes it once the checks pass and both installers are in it. It stops if that version already has a tag.
 
 Installed copies find new versions through the release's `latest.json`, which the builds write, and install only files signed with the updater key. The repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` hold the private key and its password, and `plugins.updater.pubkey` in `tauri.conf.json` its public half; a release fails without them, while other builds without the secret (pull requests from forks) skip the update files. Losing the private key means installed copies can't update anymore: keep a backup outside GitHub. To try an update without releasing, build with a test key and a local `latest.json` through `--config` (the endpoint is fixed at build time, so a released app can't be pointed elsewhere):
 

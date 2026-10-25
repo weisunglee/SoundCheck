@@ -224,16 +224,16 @@ npm run check:i18n    # 檢查每種語言都翻譯了所有介面文字
 
 ### 自動建置與發布
 
-`.github/workflows/build.yml` 在每個 PR 和每次 push 到 `main` 時執行：型別檢查、單元測試、翻譯檢查，接著在 Windows 和 macOS（universal）上跑 Rust 測試、編譯外掛並打包 App，安裝檔放在每次執行的附件裡。
+`.github/workflows/build.yml` 在每個 PR 上跑型別檢查、單元測試和翻譯檢查。建置只在手動執行時跑（Actions → Build → Run workflow）：先跑上面的檢查，再在 Windows 和 macOS（universal）上跑 Rust 測試、編譯外掛並打包 App，安裝檔放在該次執行的附件裡。
 
-要發布新版本，改版號後 push 到 `main`：
+要發布新版本，先在 `main` 改版號：
 
 ```sh
 npm run bump -- 0.3.0     # 或 patch／minor／major，會一起改所有存版號的檔案
 git commit -am "Release 0.3.0" && git push
 ```
 
-push 讓 `src-tauri/tauri.conf.json` 的版號變成一個還沒有 tag 的版號時，兩個平台會打包進草稿 Release `v0.3.0`，檢查都通過、兩個安裝檔都上傳後才正式發布。
+接著在 `main` 上手動執行 workflow，並勾選「release」。兩個平台會打包進草稿 Release `v0.3.0`，檢查都通過、兩個安裝檔都上傳後才正式發布。如果這個版號已經有 tag，就會直接停下來。
 
 已安裝的 App 透過 Release 裡的 `latest.json` 找新版本，而且只安裝用更新金鑰簽過的檔案。私鑰和密碼放在 repo secrets `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，公鑰在 `tauri.conf.json` 的 `plugins.updater.pubkey`；發布時缺少它們會失敗，其他沒有 secret 的建置（例如 fork 來的 PR）則不產生更新檔。私鑰遺失的話，已安裝的 App 就再也無法自動更新，請在 GitHub 以外另外備份。不發布也能測試更新的方法見英文 README 的 “Continuous integration and releases”。外掛有自己的版號，在 `obs-plugin/buildspec.json`。安裝檔目前都沒有程式碼簽章：Windows 的 SmartScreen 會警告「不明發行者」，macOS 第一次開啟要按右鍵 →「打開」。
 
