@@ -1,8 +1,8 @@
 // Sets the app version everywhere it is stored, so a release can't ship with them out of step.
 //   npm run bump -- 0.3.0       a specific version
 //   npm run bump -- patch       0.2.0 → 0.2.1 (also minor, major)
-// Commit and push the result to main; the Build workflow releases v<version> (see
-// .github/workflows/build.yml). The plugin has its own version, in obs-plugin/buildspec.json.
+// Get the result onto main, then run the Build workflow on main with "release" ticked to
+// release v<version> (see .github/workflows/build.yml). The plugin has its own version, in obs-plugin/buildspec.json.
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,4 +57,4 @@ lock.version = version;
 lock.packages[""].version = version;
 writeFileSync(file("package-lock.json"), JSON.stringify(lock, null, 2) + "\n");
 
-console.log(`${current} → ${version}. Commit and push to main to release v${version}.`);
+console.log(`${current} → ${version}. Get it onto main, then run the Build workflow there with "release" ticked to release v${version}.`);
