@@ -77,7 +77,10 @@ export function FilterWizard({ ops, sourceName, onVoiceTuning, inputDb, onClose 
             {onVoiceTuning && (
               <button type="button" className="problem voice-entry" disabled={busy} onClick={onVoiceTuning}>
                 <Icon name="wand-sparkles" />
-                <span className="problem-title">{t("自動調整人聲")}</span>
+                <span className="problem-title">
+                  {t("自動調整人聲")}
+                  <span className="reco-badge">{t("推薦")}</span>
+                </span>
                 <span className="problem-detail">{t("錄一段說話，分析你的聲線，自動設定等化、壓縮和音量")}</span>
               </button>
             )}

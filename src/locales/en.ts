@@ -447,6 +447,15 @@ const table: Record<string, string> = {
   "整體音量從大約 {now} LUFS 調到 {target} LUFS（{db}）。": "Brings the overall level from about {now} LUFS to {target} LUFS ({db}).",
   "整體音量調到大約 {target} LUFS。": "Brings the overall level to about {target} LUFS.",
   "最後加上限制器，大叫的時候也不會爆音。": "Ends with a limiter, so shouting doesn't clip.",
+  "讓你的聲音更好聽": "Make your voice sound better",
+  "說一段話，自動調好等化、壓縮和音量": "Talk for a bit; EQ, compression and level are set for you",
+  "不用了": "No thanks",
+  "推薦": "Recommended",
+  "加入麥克風後，在它的卡片上按「自動調整人聲」。": "Add a mic, then click \"Tune my voice\" on its card.",
+  "試試看": "Try it",
+  "知道了": "Got it",
+  "新功能：自動調整人聲": "New: Tune my voice",
+  "說一段話，自動調好麥克風的等化、壓縮和音量。": "Talk for a bit, and your mic's EQ, compression and level are set for you.",
 };
 
 export default table;

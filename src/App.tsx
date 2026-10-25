@@ -16,6 +16,7 @@ import { StreamMeter } from "./components/StreamMeter";
 import { SystemSounds } from "./components/SystemSounds";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { VoiceTuning } from "./components/VoiceTuning";
+import { WhatsNew } from "./components/WhatsNew";
 import { capabilitiesOf } from "./adapter";
 import { useAudio } from "./audio";
 import { useConnection } from "./connection";
@@ -28,6 +29,8 @@ import { type ThemeChoice, useTheme } from "./theme";
 import { useUpdater } from "./updater";
 import type { SoftwareId } from "./software";
 import type { AudioSource } from "./types";
+import { dismissKey, isMicSource, loadDismissed, saveDismissed, shouldSuggestVoiceTuning } from "./voiceGuide";
+import { NOTICES, loadSeen, pickNotice, saveSeen } from "./whatsNew";
 import { LANGUAGES, type Lang, t, useLanguage } from "./i18n";
 
 type View = "scene" | "table";
@@ -48,6 +51,9 @@ export default function App() {
   const [profilesOpen, setProfilesOpen] = useState(false);
   const [flashing, setFlashing] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Mic cards whose voice tuning suggestion the user turned down.
+  const [voiceDismissed, setVoiceDismissed] = useState(loadDismissed);
+  const [noticeSeen, setNoticeSeen] = useState(loadSeen);
   // The prompt at start waits until a sound test or voice tuning is closed.
   const updater = useUpdater(soundTestOpen || voiceFor !== null);
 
@@ -208,6 +214,24 @@ export default function App() {
 
   const { inScene, heard, silent, notHeard, elsewhere, heardCount } = programAudibility(state, sounding);
 
+  const dismissVoiceSuggestion = (source: string) => {
+    if (!software) return;
+    const next = new Set(voiceDismissed).add(dismissKey(software, source));
+    setVoiceDismissed(next);
+    saveDismissed(next);
+  };
+
+  // The newest "what's new" notice, once connected and nothing else is open; dialogs hide it.
+  const notice = pickNotice(NOTICES, noticeSeen);
+  const idle = !updater.open && !pluginFor && !filtersFor && !voiceFor && !addStart && !profilesOpen && !soundTestOpen;
+  const noticeShown = notice && idle && (notice.action !== "voiceTuning" || caps.voiceTuning) ? notice : null;
+  const firstMic = sources.find(isMicSource);
+  const closeNotice = () => {
+    if (!notice) return;
+    setNoticeSeen(notice.version);
+    saveSeen(notice.version);
+  };
+
   const strip = ({ source, status }: SourceWithStatus) => (
     <ChannelStrip
       key={source.name}
@@ -229,6 +253,11 @@ export default function App() {
       onAddStreamTracks={() => audio.addStreamTracks(source.name)}
       onVisible={(visible) =>
         audio.setItemsVisible(visible ? itemsToShow(programScene, source.name, scenes) : itemsToHide(programScene, source.name, scenes), visible)
+      }
+      voiceSuggestion={
+        software && adapter?.filters && shouldSuggestVoiceTuning(source, software, caps.voiceTuning, voiceDismissed)
+          ? { open: () => setVoiceFor(source.name), dismiss: () => dismissVoiceSuggestion(source.name) }
+          : undefined
       }
     />
   );
@@ -337,6 +366,20 @@ export default function App() {
         </main>
       </div>
 
+      {noticeShown && (
+        <WhatsNew
+          notice={noticeShown}
+          onAction={
+            noticeShown.action === "voiceTuning" && firstMic
+              ? () => {
+                  closeNotice();
+                  setVoiceFor(firstMic.name);
+                }
+              : undefined
+          }
+          onClose={closeNotice}
+        />
+      )}
       {soundTestOpen && plugin && <SoundTest plugin={plugin} onPlayingChange={setSoundTestPlaying} onClose={() => setSoundTestOpen(false)} />}
       {profilesOpen && adapter && <ProfilesDialog adapter={adapter} sources={sources} onClose={() => setProfilesOpen(false)} />}
       {addStart && adapter && (
